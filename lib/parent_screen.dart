@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'map_screen.dart';
 import 'widgets/attendance_card.dart'; // 👈 استدعاء الملف الجديد
-
+import 'services/auth_service.dart';
+import 'login_screen.dart';
 class ParentScreen extends StatefulWidget {
   const ParentScreen({super.key});
 
@@ -32,11 +33,26 @@ class _ParentScreenState extends State<ParentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Parent Dashboard 👨‍👩‍👦"),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-      ),
+        appBar: AppBar(
+          title: const Text("Parent Dashboard 👨‍👩‍👦"),
+          backgroundColor: Colors.indigo,
+          foregroundColor: Colors.white,
+          actions: [
+            // ✅ زر تسجيل الخروج لولي الأمر
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: () async {
+                await AuthService().signOut();
+                if (context.mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
       body: Column(
         children: [
           // شريط البحث

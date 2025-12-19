@@ -9,7 +9,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'services/api_service.dart';
-import 'parent_screen.dart';
+
+import 'login_screen.dart';
+import 'services/auth_service.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +37,7 @@ class SmartSchoolApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const AttendanceScreen(),
+      home: const LoginScreen(),
     );
   }
 }
@@ -242,13 +245,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             label: Text(_isTracking ? "STOP TRIP" : "START TRIP", style: const TextStyle(color: Colors.white)),
           ),
           IconButton(
-            icon: const Icon(Icons.family_restroom),
-            tooltip: "Parent View",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ParentScreen()),
-              );
+            icon: const Icon(Icons.logout),
+            tooltip: "Logout",
+            onPressed: () async {
+              // 1. تسجيل الخروج من فايربيس
+              await AuthService().signOut();
+
+              // 2. العودة لشاشة الدخول
+              if (context.mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              }
             },
           ),
         ],
@@ -314,7 +323,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [Colors.teal.shade50, Colors.white]),
                     borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))],
+                    boxShadow: [BoxShadow(color: Colors.grey, blurRadius: 8, offset: const Offset(0, 4))],
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -338,7 +347,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             const Spacer(),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                              decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(20)),
                               child: Text(student['status'], style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                             ),
                           ],
