@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:io';
+// 👇 1. إضافة هذا الاستيراد ضروري جداً
+import 'firebase_options.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,11 +9,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'services/api_service.dart';
-import 'parent_screen.dart'; // 👈 استيراد شاشة الأب
+import 'parent_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+
+  // 👇 2. هذا هو السطر الذي يحل المشكلة (تمرير options)
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const SmartSchoolApp());
 }
 
@@ -45,6 +53,75 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   List<Map<String, dynamic>> _students = [];
   String? _message;
 
+  // 👇 متغيرات التتبع الجديدة
+  bool _isTracking = false; // هل الرحلة جارية؟
+  Timer? _trackingTimer; // المؤقت
+  final String _currentBusId = "bus_01"; // معرف الباص (ثابت حالياً للتجربة)
+
+  // 👇 دالة بدء/إيقاف الرحلة
+  void _toggleTrip() async {
+    if (_isTracking) {
+      // إيقاف الرحلة
+      _stopTracking();
+    } else {
+      // بدء الرحلة
+      await _startTracking();
+    }
+  }
+
+  Future<void> _startTracking() async {
+    // 1. التأكد من الأذونات
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    setState(() {
+      _isTracking = true;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("🚌 Trip Started! Sharing location..."), backgroundColor: Colors.green),
+    );
+
+    // تحديث الحالة في قاعدة البيانات إلى "نشط"
+    FirebaseFirestore.instance.collection('buses').doc(_currentBusId).update({
+      'is_active': true,
+    });
+
+    // 2. تشغيل المؤقت: إرسال الموقع كل 5 ثوانٍ (جعلناها 5 لتشعر بالسرعة)
+    _trackingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      Position position = await Geolocator.getCurrentPosition();
+
+      print("📍 Updating Bus Location: ${position.latitude}, ${position.longitude}");
+
+      // 3. تحديث الموقع في Firebase
+      await FirebaseFirestore.instance.collection('buses').doc(_currentBusId).update({
+        'current_location': GeoPoint(position.latitude, position.longitude),
+        'last_updated': FieldValue.serverTimestamp(),
+        'plate_number': 'ABC-123', // لضمان وجودها
+      });
+    });
+  }
+
+  void _stopTracking() {
+    _trackingTimer?.cancel(); // إيقاف المؤقت
+    setState(() {
+      _isTracking = false;
+    });
+
+    // تحديث الحالة إلى "غير نشط"
+    FirebaseFirestore.instance.collection('buses').doc(_currentBusId).update({
+      'is_active': false,
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("🛑 Trip Ended."), backgroundColor: Colors.red),
+    );
+  }
+
+  // ... (بقية دوال الصور والكاميرا كما هي بدون تغيير) ...
   Future<void> _processImage(ImageSource source) async {
     final XFile? photo = await _picker.pickImage(source: source);
     if (photo == null) return;
@@ -154,11 +231,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Smart Attendance 🎓"),
-        backgroundColor: Colors.teal,
+        title: const Text("Driver Dashboard 🚌"),
+        backgroundColor: _isTracking ? Colors.red : Colors.teal, // تغيير اللون عند التتبع
         foregroundColor: Colors.white,
         actions: [
-          // 👇 زر الانتقال لشاشة ولي الأمر
+          // زر التتبع الجديد في الشريط العلوي
+          TextButton.icon(
+            onPressed: _toggleTrip,
+            icon: Icon(_isTracking ? Icons.stop_circle : Icons.play_circle_fill, color: Colors.white),
+            label: Text(_isTracking ? "STOP TRIP" : "START TRIP", style: const TextStyle(color: Colors.white)),
+          ),
           IconButton(
             icon: const Icon(Icons.family_restroom),
             tooltip: "Parent View",
@@ -173,6 +255,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
       body: Column(
         children: [
+          // شريط حالة التتبع
+          if (_isTracking)
+            Container(
+              width: double.infinity,
+              color: Colors.redAccent,
+              padding: const EdgeInsets.all(8),
+              child: const Text(
+                "📡 LIVE TRACKING ACTIVE - Sending location updates...",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
           Expanded(
             flex: 2,
             child: Container(
@@ -190,6 +285,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
           ),
 
+          // ... (بقية واجهة المستخدم كما هي) ...
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -211,6 +307,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 : ListView.builder(
               itemCount: _students.length,
               itemBuilder: (context, index) {
+                // ... (نفس كود عرض الطلاب السابق) ...
                 final student = _students[index];
                 return Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -250,8 +347,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _infoChip(Icons.directions_bus, "${student['bus_plate']}", Colors.blue),
-                            _infoChip(Icons.phone, "${student['parent_phone']}", Colors.orange),
+                            Row(children: [const Icon(Icons.directions_bus, size: 20, color: Colors.blue), const SizedBox(width: 5), Text("${student['bus_plate']}", style: const TextStyle(fontWeight: FontWeight.w500))]),
+                            Row(children: [const Icon(Icons.phone, size: 20, color: Colors.orange), const SizedBox(width: 5), Text("${student['parent_phone']}", style: const TextStyle(fontWeight: FontWeight.w500))]),
                           ],
                         ),
                       ],
@@ -263,16 +360,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _infoChip(IconData icon, String label, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 5),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-      ],
     );
   }
 }

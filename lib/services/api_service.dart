@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart'; // <--- هذا السطر ال�
 
 class ApiService {
 
-  static const String baseUrl = "http://127.0.0.1:8000";
+  static final String baseUrl = 'http://127.0.0.1:8000';
 
   static const String _attendanceEndpoint = '/api/attendance/scan';
 
