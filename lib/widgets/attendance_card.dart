@@ -1,24 +1,33 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class AttendanceCard extends StatelessWidget {
-  final Map<String, dynamic> data;
+  final String title;
   final String time;
   final String date;
-  final VoidCallback? onTap; // دالة عند الضغط (للخريطة)
+  final String busPlate;
+  final bool hasLocation;
+  final Color statusColor;
+  final IconData statusIcon;
+  final VoidCallback? onTap;
 
   const AttendanceCard({
     super.key,
-    required this.data,
+    required this.title,
     required this.time,
     required this.date,
+    required this.busPlate,
+    required this.hasLocation,
+    required this.statusColor,
+    required this.statusIcon,
     this.onTap,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    // 👇 منطق الألوان والحالة تم عزله هنا
+  factory AttendanceCard.fromData(Map<String, dynamic> data, {VoidCallback? onTap}) {
     String status = data['status'] ?? 'Absent';
     bool hasLocation = data['location'] != null;
+    Timestamp? timestamp = data['timestamp'];
 
     Color statusColor;
     IconData statusIcon;
@@ -38,29 +47,40 @@ class AttendanceCard extends StatelessWidget {
       statusText = "Absent";
     }
 
+    return AttendanceCard(
+      title: statusText,
+      time: timestamp != null ? DateFormat('hh:mm a').format(timestamp.toDate()) : "--:--",
+      date: timestamp != null ? DateFormat('MMM dd, yyyy').format(timestamp.toDate()) : "Unknown",
+      busPlate: data['bus_plate'] ?? 'N/A',
+      hasLocation: hasLocation,
+      statusColor: statusColor,
+      statusIcon: statusIcon,
+      onTap: onTap,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap, // عند الضغط تنفذ الدالة القادمة من الأب
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
             children: [
-              // 1. أيقونة الحالة
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withAlpha(25),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(statusIcon, color: statusColor, size: 30),
               ),
               const SizedBox(width: 15),
-
-              // 2. تفاصيل النص
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,11 +88,11 @@ class AttendanceCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          statusText,
+                          title,
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: statusColor.withOpacity(0.8),
+                            color: statusColor.withAlpha(204),
                           ),
                         ),
                         if (hasLocation)
@@ -83,19 +103,16 @@ class AttendanceCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text("Bus: ${data['bus_plate'] ?? 'N/A'}",
+                    Text("Bus: $busPlate",
                         style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                     Text(date,
                         style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-
                     if (hasLocation)
                       Text("Tap to track location 📍",
                           style: TextStyle(color: Colors.indigo[300], fontSize: 11, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
-
-              // 3. الوقت
               Column(
                 children: [
                   Text(time,

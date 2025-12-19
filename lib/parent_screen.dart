@@ -65,24 +65,13 @@ class _ParentScreenState extends State<ParentScreen> {
                   padding: const EdgeInsets.all(12),
                   itemBuilder: (context, index) {
                     final data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-
-                    // تحضير البيانات
-                    Timestamp? timestamp = data['timestamp'];
-                    String timeStr = timestamp != null
-                        ? DateFormat('hh:mm a').format(timestamp.toDate())
-                        : "--:--";
-                    String dateStr = timestamp != null
-                        ? DateFormat('MMM dd, yyyy').format(timestamp.toDate())
-                        : "Unknown";
                     GeoPoint? loc = data['location'];
 
-                    // 👇 استدعاء الودجت النظيف الذي أنشأناه
-                    return AttendanceCard(
-                      data: data,
-                      time: timeStr,
-                      date: dateStr,
+                    return AttendanceCard.fromData(
+                      data,
                       onTap: loc != null
-                          ? () => _openMap(context, loc.latitude, loc.longitude, data['name'], timeStr)
+                          ? () => _openMap(context, loc.latitude, loc.longitude, data['name'],
+                              data['timestamp'] != null ? DateFormat('hh:mm a').format((data['timestamp'] as Timestamp).toDate()) : "--:--")
                           : () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No GPS data 🚫"))),
                     );
                   },
@@ -99,7 +88,7 @@ class _ParentScreenState extends State<ParentScreen> {
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.all(16.0),
-      color: Colors.indigo.withOpacity(0.05),
+      color: const Color.fromRGBO(75, 0, 130, 0.05),
       child: Row(
         children: [
           Expanded(
