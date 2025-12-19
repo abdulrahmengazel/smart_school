@@ -1,10 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'map_screen.dart';
-import 'widgets/attendance_card.dart'; // 👈 استدعاء الملف الجديد
+import 'map_screen.dart'; // 👈 استدعاء الملف الجديد
 import 'services/auth_service.dart';
 import 'login_screen.dart';
+
 class ParentScreen extends StatefulWidget {
   const ParentScreen({super.key});
 
@@ -13,10 +14,15 @@ class ParentScreen extends StatefulWidget {
 }
 
 class _ParentScreenState extends State<ParentScreen> {
-  final TextEditingController _idController = TextEditingController(text: "21");
-  int? _targetId = 21;
+  final String? _currentUserUid = FirebaseAuth.instance.currentUser?.uid;
 
-  void _openMap(BuildContext context, double lat, double lng, String name, String time) {
+  void _openMap(
+    BuildContext context,
+    double lat,
+    double lng,
+    String name,
+    String time,
+  ) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -33,104 +39,190 @@ class _ParentScreenState extends State<ParentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(
-          title: const Text("Parent Dashboard 👨‍👩‍👦"),
-          backgroundColor: Colors.indigo,
-          foregroundColor: Colors.white,
-          actions: [
-            // ✅ زر تسجيل الخروج لولي الأمر
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () async {
-                await AuthService().signOut();
-                if (context.mounted) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      body: Column(
-        children: [
-          // شريط البحث
-          _buildSearchBar(),
-
-          // القائمة
-          Expanded(
-            child: _targetId == null
-                ? const Center(child: Text("Please enter a valid Student ID"))
-                : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('attendance')
-                  .where('student_id', isEqualTo: _targetId)
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text("No records found."));
-                }
-
-                return ListView.builder(
-                  itemCount: snapshot.data!.docs.length,
-                  padding: const EdgeInsets.all(12),
-                  itemBuilder: (context, index) {
-                    final data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                    GeoPoint? loc = data['location'];
-
-                    return AttendanceCard.fromData(
-                      data,
-                      onTap: loc != null
-                          ? () => _openMap(context, loc.latitude, loc.longitude, data['name'],
-                              data['timestamp'] != null ? DateFormat('hh:mm a').format((data['timestamp'] as Timestamp).toDate()) : "--:--")
-                          : () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No GPS data 🚫"))),
-                    );
-                  },
+      appBar: AppBar(
+        title: const Text("My Children 👨‍👩‍👦"),
+        backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthService().signOut();
+              if (context.mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
-              },
-            ),
+              }
+            },
           ),
         ],
       ),
-    );
-  }
+      // 1. أولاً: نجلب قائمة الطلاب المرتبطين بهذا الأب
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('students')
+            .where('parent_uid', isEqualTo: _currentUserUid) // 👈 السر هنا
+            .snapshots(),
+        builder: (context, studentSnapshot) {
+          if (studentSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-  // فصلنا كود البحث في دالة صغيرة لترتيب الكود أكثر
-  Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      color: const Color.fromRGBO(75, 0, 130, 0.05),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _idController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Student ID",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person_search),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: () => setState(() => _targetId = int.tryParse(_idController.text)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-            ),
-            child: const Text("Track"),
-          ),
-        ],
+          if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text("No children linked to this account."),
+            );
+          }
+
+          // قائمة أرقام الطلاب (IDs) التابعين للأب
+          List<int> studentIds = studentSnapshot.data!.docs
+              .map((doc) => int.parse(doc.id))
+              .toList();
+
+          // 2. ثانياً: نجلب سجلات الحضور لهؤلاء الطلاب فقط
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('attendance')
+                .where(
+                  'student_id',
+                  whereIn: studentIds,
+                ) // 👈 جلب الحضور لهذه القائمة فقط
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, attendanceSnapshot) {
+              if (attendanceSnapshot.connectionState ==
+                  ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (!attendanceSnapshot.hasData ||
+                  attendanceSnapshot.data!.docs.isEmpty) {
+                return const Center(
+                  child: Text("No attendance records today."),
+                );
+              }
+
+              final docs = attendanceSnapshot.data!.docs;
+
+              return ListView.builder(
+                itemCount: docs.length,
+                padding: const EdgeInsets.all(12),
+                itemBuilder: (context, index) {
+                  final data = docs[index].data() as Map<String, dynamic>;
+
+                  // الكود القديم لعرض البطاقة (نفسه تماماً)
+                  Timestamp? timestamp = data['timestamp'];
+                  String timeStr = timestamp != null
+                      ? DateFormat('hh:mm a').format(timestamp.toDate())
+                      : "--:--";
+                  String dateStr = timestamp != null
+                      ? DateFormat('MMM dd, yyyy').format(timestamp.toDate())
+                      : "Unknown Date";
+                  bool isPresent = data['status'] == 'Present';
+                  GeoPoint? location = data['location'];
+
+                  return Card(
+                    elevation: 3,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: InkWell(
+                      onTap: location != null
+                          ? () => _openMap(
+                              context,
+                              location.latitude,
+                              location.longitude,
+                              data['name'],
+                              timeStr,
+                            )
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isPresent
+                                    ? Colors.green.shade50
+                                    : Colors.red.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isPresent ? Icons.check_circle : Icons.cancel,
+                                color: isPresent ? Colors.green : Colors.red,
+                                size: 30,
+                              ),
+                            ),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    data['name'] ?? "Unknown", // اسم الطالب
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  Text(
+                                    isPresent ? "Arrived Safely ✅" : "Absent ❌",
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    dateStr,
+                                    style: TextStyle(
+                                      color: Colors.grey[400],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  if (location != null)
+                                    Text(
+                                      "Tap to track 📍",
+                                      style: TextStyle(
+                                        color: Colors.indigo[300],
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              children: [
+                                Text(
+                                  timeStr,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.indigo,
+                                  ),
+                                ),
+                                const Text(
+                                  "TIME",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }

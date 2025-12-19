@@ -69,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Icon(Icons.school, size: 80, color: Colors.teal),
               const SizedBox(height: 20),
               const Text(
-                "Smart School Login",
+                "Smart School",
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.teal),
               ),
               const SizedBox(height: 40),
