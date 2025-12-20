@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/auth_service.dart';
-import 'main.dart'; // لاستيراد شاشة السائق
 import 'parent_screen.dart'; // لاستيراد شاشة الأب
-
+import 'driver_screen.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -39,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // توجيه للسائق
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const AttendanceScreen()),
+          MaterialPageRoute(builder: (context) => const DriverScreen()),
         );
       } else {
         // توجيه لولي الأمر

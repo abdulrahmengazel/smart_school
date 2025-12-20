@@ -1,8 +1,9 @@
+// lib/parent_screen.dart
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
-import 'map_screen.dart'; // 👈 استدعاء الملف الجديد
+import 'map_screen.dart';
 import 'services/auth_service.dart';
 import 'login_screen.dart';
 
@@ -16,21 +17,16 @@ class ParentScreen extends StatefulWidget {
 class _ParentScreenState extends State<ParentScreen> {
   final String? _currentUserUid = FirebaseAuth.instance.currentUser?.uid;
 
-  void _openMap(
-    BuildContext context,
-    double lat,
-    double lng,
-    String name,
-    String time,
-  ) {
+  void _openMap(BuildContext context, Map<String, dynamic> attendanceData) {
+    GeoPoint? loc = attendanceData['location'];
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MapScreen(
-          latitude: lat,
-          longitude: lng,
-          studentName: name,
-          time: time,
+          latitude: loc?.latitude ?? 0.0,
+          longitude: loc?.longitude ?? 0.0,
+          studentName: attendanceData['name'],
+          time: "Live Tracking",
         ),
       ),
     );
@@ -38,9 +34,11 @@ class _ParentScreenState extends State<ParentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    String todayDate = DateTime.now().toString().split(' ')[0];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Children 👨‍👩‍👦"),
+        title: const Text("My Children Status 🚌"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
@@ -48,173 +46,163 @@ class _ParentScreenState extends State<ParentScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await AuthService().signOut();
-              if (context.mounted) {
+              if (context.mounted)
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
-              }
             },
           ),
         ],
       ),
-      // 1. أولاً: نجلب قائمة الطلاب المرتبطين بهذا الأب
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('students')
-            .where('parent_uid', isEqualTo: _currentUserUid) // 👈 السر هنا
+            .where('parent_uid', isEqualTo: _currentUserUid)
             .snapshots(),
         builder: (context, studentSnapshot) {
-          if (studentSnapshot.connectionState == ConnectionState.waiting) {
+          if (studentSnapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-          }
+          if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty)
+            return const Center(child: Text("No children linked."));
 
-          if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Text("No children linked to this account."),
-            );
-          }
+          var studentsDocs = studentSnapshot.data!.docs;
 
-          // قائمة أرقام الطلاب (IDs) التابعين للأب
-          List<int> studentIds = studentSnapshot.data!.docs
-              .map((doc) => int.parse(doc.id))
-              .toList();
+          return ListView.builder(
+            itemCount: studentsDocs.length,
+            padding: const EdgeInsets.all(16),
+            itemBuilder: (context, index) {
+              var studentData =
+                  studentsDocs[index].data() as Map<String, dynamic>;
+              String studentId = studentsDocs[index].id; // الآيدي كنص
+              String studentName = studentData['name'] ?? "Unknown";
 
-          // 2. ثانياً: نجلب سجلات الحضور لهؤلاء الطلاب فقط
-          return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('attendance')
-                .where(
-                  'student_id',
-                  whereIn: studentIds,
-                ) // 👈 جلب الحضور لهذه القائمة فقط
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, attendanceSnapshot) {
-              if (attendanceSnapshot.connectionState ==
-                  ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+              return StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('attendance')
+                    // 👇👇👇 هنا المطابقة: نص مع نص 👇👇👇
+                    .where('student_id', isEqualTo: studentId)
+                    .where('date', isEqualTo: todayDate)
+                    .limit(1)
+                    .snapshots(),
+                builder: (context, attendanceSnapshot) {
+                  // فحص الأخطاء (مهم جداً للفهرس)
+                  if (attendanceSnapshot.hasError) {
+                    print("Stream Error: ${attendanceSnapshot.error}");
+                    return const Text(
+                      "Loading Error (Check Console for Index Link)",
+                    );
+                  }
 
-              if (!attendanceSnapshot.hasData ||
-                  attendanceSnapshot.data!.docs.isEmpty) {
-                return const Center(
-                  child: Text("No attendance records today."),
-                );
-              }
+                  String status = 'Waiting';
+                  Map<String, dynamic>? attendanceRecord;
 
-              final docs = attendanceSnapshot.data!.docs;
+                  if (attendanceSnapshot.hasData &&
+                      attendanceSnapshot.data!.docs.isNotEmpty) {
+                    attendanceRecord =
+                        attendanceSnapshot.data!.docs.first.data()
+                            as Map<String, dynamic>;
+                    status = attendanceRecord['status'] ?? 'Boarded';
+                  }
 
-              return ListView.builder(
-                itemCount: docs.length,
-                padding: const EdgeInsets.all(12),
-                itemBuilder: (context, index) {
-                  final data = docs[index].data() as Map<String, dynamic>;
+                  Color statusColor = Colors.orange;
+                  String statusText = "Waiting for Bus... ⏳";
+                  VoidCallback? onTrackPressed;
+                  IconData statusIcon = Icons.hourglass_empty;
 
-                  // الكود القديم لعرض البطاقة (نفسه تماماً)
-                  Timestamp? timestamp = data['timestamp'];
-                  String timeStr = timestamp != null
-                      ? DateFormat('hh:mm a').format(timestamp.toDate())
-                      : "--:--";
-                  String dateStr = timestamp != null
-                      ? DateFormat('MMM dd, yyyy').format(timestamp.toDate())
-                      : "Unknown Date";
-                  bool isPresent = data['status'] == 'Present';
-                  GeoPoint? location = data['location'];
+                  if (status == 'Boarded') {
+                    statusColor = Colors.green;
+                    statusText = "On Bus 🚌";
+                    statusIcon = Icons.directions_bus;
+                    onTrackPressed = () => _openMap(context, attendanceRecord!);
+                  } else if (status == 'DroppedOff') {
+                    statusColor = Colors.grey;
+                    statusText = "Dropped Off 🏠";
+                    statusIcon = Icons.check_circle;
+                    onTrackPressed = null;
+                  }
 
                   return Card(
-                    elevation: 3,
-                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    child: InkWell(
-                      onTap: location != null
-                          ? () => _openMap(
-                              context,
-                              location.latitude,
-                              location.longitude,
-                              data['name'],
-                              timeStr,
-                            )
-                          : null,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isPresent
-                                    ? Colors.green.shade50
-                                    : Colors.red.shade50,
-                                shape: BoxShape.circle,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 30,
+                                backgroundColor: Colors.indigo.shade100,
+                                child: Text(
+                                  studentName[0],
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
-                              child: Icon(
-                                isPresent ? Icons.check_circle : Icons.cancel,
-                                color: isPresent ? Colors.green : Colors.red,
-                                size: 30,
-                              ),
-                            ),
-                            const SizedBox(width: 15),
-                            Expanded(
-                              child: Column(
+                              const SizedBox(width: 15),
+                              Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    data['name'] ?? "Unknown", // اسم الطالب
+                                    studentName,
                                     style: const TextStyle(
+                                      fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 16,
                                     ),
                                   ),
                                   Text(
-                                    isPresent ? "Arrived Safely ✅" : "Absent ❌",
-                                    style: TextStyle(
-                                      color: Colors.grey[700],
-                                      fontSize: 14,
-                                    ),
+                                    "Grade: ${studentData['grade'] ?? 'N/A'}",
+                                    style: TextStyle(color: Colors.grey[600]),
                                   ),
-                                  Text(
-                                    dateStr,
-                                    style: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  if (location != null)
-                                    Text(
-                                      "Tap to track 📍",
-                                      style: TextStyle(
-                                        color: Colors.indigo[300],
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
                                 ],
                               ),
-                            ),
-                            Column(
-                              children: [
-                                Text(
-                                  timeStr,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: Colors.indigo,
-                                  ),
-                                ),
-                                const Text(
-                                  "TIME",
+                            ],
+                          ),
+                          const Divider(height: 30),
+                          Row(
+                            children: [
+                              Icon(statusIcon, color: statusColor, size: 28),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  statusText,
                                   style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey,
+                                    color: statusColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
                                   ),
                                 ),
-                              ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 15),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: onTrackPressed,
+                              icon: const Icon(Icons.map),
+                              label: Text(
+                                status == 'Boarded'
+                                    ? "TRACK LIVE LOCATION"
+                                    : "TRACKING INACTIVE",
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: status == 'Boarded'
+                                    ? Colors.indigo
+                                    : Colors.grey[300],
+                                foregroundColor: status == 'Boarded'
+                                    ? Colors.white
+                                    : Colors.grey[600],
+                              ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   );
