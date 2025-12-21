@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:smart_school/admin_setup_screen.dart';
 import 'services/auth_service.dart';
 import 'parent_screen.dart'; // لاستيراد شاشة الأب
 import 'driver_screen.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -69,7 +71,11 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               const Text(
                 "Smart School",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.teal),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.teal,
+                ),
               ),
               const SizedBox(height: 40),
 
@@ -102,7 +108,10 @@ class _LoginScreenState extends State<LoginScreen> {
               if (_errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 ),
 
               SizedBox(
@@ -119,6 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       : const Text("LOGIN", style: TextStyle(fontSize: 18)),
                 ),
               ),
+              // مثال لزر مؤقت
+
             ],
           ),
         ),

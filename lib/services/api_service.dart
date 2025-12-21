@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 // import 'dart:io'; // نحذفه أو نتركه، لكن XFile يغنينا عنه في الويب
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,12 +8,9 @@ import 'package:flutter/foundation.dart'; // لمعرفة المنصة (kIsWeb)
 import 'package:image_picker/image_picker.dart'; // <--- هذا السطر الناقص (import XFile)
 
 class ApiService {
-
-  static final String baseUrl = 'http://127.0.0.1:8000';
-
+  static final String baseUrl =
+      'https://walleyed-elda-sheaflike.ngrok-free.dev';
   static const String _attendanceEndpoint = '/api/attendance/scan';
-
-
 
   // نستخدم XFile هنا ليدعم الويب والموبايل
   static Future<Map<String, dynamic>> scanAttendance(XFile imageFile) async {
@@ -23,14 +21,18 @@ class ApiService {
 
       if (kIsWeb) {
         // للويب: نرسل البايتات (Bytes)
-        request.files.add(http.MultipartFile.fromBytes(
-          'file',
-          await imageFile.readAsBytes(),
-          filename: imageFile.name, // نستخدم الاسم الأصلي
-        ));
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            await imageFile.readAsBytes(),
+            filename: imageFile.name, // نستخدم الاسم الأصلي
+          ),
+        );
       } else {
         // للموبايل: نرسل المسار (Path)
-        request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+        request.files.add(
+          await http.MultipartFile.fromPath('file', imageFile.path),
+        );
       }
 
       print("🚀 Sending request to: $url");
@@ -40,12 +42,16 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
-        return {"success": false, "error": "Server Error: ${response.statusCode}"};
+        return {
+          "success": false,
+          "error": "Server Error: ${response.statusCode}",
+        };
       }
     } catch (e) {
       return {"success": false, "error": "Connection Error: $e"};
     }
   }
+
   Future<Map<String, dynamic>?> getMyBus() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;

@@ -3,6 +3,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'admin_setup_screen.dart';
 import 'map_screen.dart';
 import 'services/auth_service.dart';
 import 'login_screen.dart';
@@ -201,6 +202,17 @@ class _ParentScreenState extends State<ParentScreen> {
                                     : Colors.grey[600],
                               ),
                             ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const AdminSetupScreen(),
+                                ),
+                              );
+                            },
+                            child: Text("Go to Admin Setup"),
                           ),
                         ],
                       ),
