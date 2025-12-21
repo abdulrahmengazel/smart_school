@@ -113,7 +113,11 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
 
     User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ You must be logged in to assign Parent UID")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("⚠️ You must be logged in to assign Parent UID"),
+        ),
+      );
       setState(() => _isLoading = false);
       return;
     }
@@ -125,7 +129,9 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
       var routesSnapshot = await _firestore.collection('bus_routes').get();
 
       if (studentsSnapshot.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No students found to upgrade!")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No students found to upgrade!")),
+        );
         setState(() => _isLoading = false);
         return;
       }
@@ -139,8 +145,12 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
 
       for (var studentDoc in studentsSnapshot.docs) {
         // توزيع الطلاب على الصفوف والباصات بالتناوب
-        String assignedClassId = classIds.isNotEmpty ? classIds[i % classIds.length] : 'unknown_class';
-        String assignedBusId = busIds.isNotEmpty ? busIds[i % busIds.length] : 'unknown_bus';
+        String assignedClassId = classIds.isNotEmpty
+            ? classIds[i % classIds.length]
+            : 'unknown_class';
+        String assignedBusId = busIds.isNotEmpty
+            ? busIds[i % busIds.length]
+            : 'unknown_bus';
 
         batch.update(studentDoc.reference, {
           // الحقول الجديدة المطلوبة
@@ -161,12 +171,19 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
 
       await batch.commit();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Upgraded ${studentsSnapshot.docs.length} students & Linked to YOU!")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "✅ Upgraded ${studentsSnapshot.docs.length} students & Linked to YOU!",
+            ),
+          ),
+        );
       }
-
     } catch (e) {
       print("Error upgrading: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
 
     setState(() => _isLoading = false);
@@ -223,15 +240,16 @@ class _AdminSetupScreenState extends State<AdminSetupScreen> {
                   // زر الربط السحري
                   const SizedBox(height: 20),
 
-// زر الترقية والربط
+                  // زر الترقية والربط
                   ElevatedButton.icon(
                     onPressed: _upgradeStudentProfiles,
                     icon: const Icon(Icons.upgrade),
-                    label: const Text("Upgrade Profiles & Link to ME"), // Link to Me تعني ربطهم بحسابك الحالي
+                    label: const Text("Upgrade Profiles & Link to ME"),
+                    // Link to Me تعني ربطهم بحسابك الحالي
                     style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(280, 50),
-                        backgroundColor: Colors.purple, // لون مميز للترقية
-                        foregroundColor: Colors.white
+                      minimumSize: const Size(280, 50),
+                      backgroundColor: Colors.purple, // لون مميز للترقية
+                      foregroundColor: Colors.white,
                     ),
                   ),
                 ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:smart_school/admin_setup_screen.dart';
+import 'package:smart_school/admin_setup_screen.dart';import 'admin_dashboard_screen.dart';
 import 'services/auth_service.dart';
 import 'parent_screen.dart'; // لاستيراد شاشة الأب
 import 'driver_screen.dart';
@@ -128,8 +128,40 @@ class _LoginScreenState extends State<LoginScreen> {
                       : const Text("LOGIN", style: TextStyle(fontSize: 18)),
                 ),
               ),
-              // مثال لزر مؤقت
+              const SizedBox(height: 20),
 
+              // زر الدخول العادي
+              ElevatedButton(
+                onPressed: _login,
+                // ... بقية خصائص الزر ...
+                child: const Text("LOGIN"),
+              ),
+
+              const SizedBox(height: 30),
+
+              // 👇 زر الأدمن السري (للمطورين)
+              TextButton.icon(
+                onPressed: () {
+                  // يجب أن تكون مسجلاً للدخول لتنفيذ عمليات الأدمن،
+                  // أو يمكنك تجاوز التحقق مؤقتاً إذا كنت فقط تريد رؤية الواجهة
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AdminDashboardScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.admin_panel_settings,
+                  color: Colors.blueGrey,
+                ),
+                label: const Text(
+                  "Admin Dashboard (Dev Only)",
+                  style: TextStyle(color: Colors.blueGrey),
+                ),
+              ),
+
+              // مثال لزر مؤقت
             ],
           ),
         ),

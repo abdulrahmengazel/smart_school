@@ -1,111 +1,64 @@
+// lib/map_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // 👈 ضروري للاتصال بقاعدة البيانات
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MapScreen extends StatelessWidget {
-  final double latitude;
-  final double longitude;
+  final double startLat; // مكان الركوب
+  final double startLng;
+  final GeoPoint? dropOffLoc; // 👈 مكان النزول (قد يكون null إذا لم ينزل بعد)
   final String studentName;
-  final String time;
+  final String busId;
 
   const MapScreen({
     super.key,
-    required this.latitude,
-    required this.longitude,
+    required this.startLat,
+    required this.startLng,
+    this.dropOffLoc, // 👈 اختياري
     required this.studentName,
-    required this.time,
+    required this.busId,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Live Tracking 🛰️"),
+        title: const Text("Trip Details 🗺️"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
       ),
       body: FlutterMap(
         options: MapOptions(
-          // نجعل المركز المبدئي هو مكان الطالب
-          initialCenter: LatLng(latitude, longitude),
+          // إذا نزل الطالب نركز الكاميرا على مكان النزول، وإلا على مكان الركوب
+          initialCenter: dropOffLoc != null
+              ? LatLng(dropOffLoc!.latitude, dropOffLoc!.longitude)
+              : LatLng(startLat, startLng),
           initialZoom: 14.0,
         ),
         children: [
-          // 1. طبقة الخريطة (OpenStreetMap)
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.example.smart_school',
           ),
 
-          // 2. طبقة الحافلة المتحركة (Live Bus Layer) 🚌
-          StreamBuilder<DocumentSnapshot>(
-            // 👇 هنا نستمع للباص الذي أنشأته (bus_01)
-            stream: FirebaseFirestore.instance.collection('buses').doc('bus_01').snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData || !snapshot.data!.exists) {
-                return const SizedBox(); // لا تظهر شيئاً إذا لم يكن هناك بيانات
-              }
-
-              var data = snapshot.data!.data() as Map<String, dynamic>;
-              bool isActive = data['is_active'] ?? false;
-              GeoPoint? busLoc = data['current_location'];
-
-              // إذا الرحلة غير نشطة أو لا يوجد موقع، لا تعرض الباص
-              if (!isActive || busLoc == null) return const SizedBox();
-
-              return MarkerLayer(
-                markers: [
-                  Marker(
-                    point: LatLng(busLoc.latitude, busLoc.longitude),
-                    width: 60,
-                    height: 60,
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.blue, // لون الباص
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            boxShadow: const [BoxShadow(blurRadius: 5, color: Colors.black26)],
-                          ),
-                          child: const Icon(Icons.directions_bus, color: Colors.white, size: 25),
-                        ),
-                        const SizedBox(height: 2),
-                        Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            color: Colors.white.withOpacity(0.8),
-                            child: const Text("Live Bus", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-
-          // 3. طبقة الطالب (المكان الثابت الذي نزل فيه) 📍
+          // 1. نقطة الركوب (خضراء)
           MarkerLayer(
             markers: [
               Marker(
-                point: LatLng(latitude, longitude),
+                point: LatLng(startLat, startLng),
                 width: 80,
                 height: 80,
-                child: Column(
+                child: const Column(
                   children: [
-                    const Icon(Icons.location_on, color: Colors.red, size: 40),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: const [BoxShadow(blurRadius: 4)],
-                      ),
-                      child: Text(
-                        "$studentName (Drop-off)",
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                    Icon(Icons.location_on, color: Colors.green, size: 40),
+                    Text(
+                      "Start",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                        backgroundColor: Colors.white,
                       ),
                     ),
                   ],
@@ -113,6 +66,65 @@ class MapScreen extends StatelessWidget {
               ),
             ],
           ),
+
+          // 2. نقطة النزول (حمراء) - تظهر فقط إذا توفرت البيانات
+          if (dropOffLoc != null)
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: LatLng(dropOffLoc!.latitude, dropOffLoc!.longitude),
+                  width: 80,
+                  height: 80,
+                  child: const Column(
+                    children: [
+                      Icon(Icons.location_on, color: Colors.red, size: 40),
+                      Text(
+                        "Drop Off",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+          // 3. الباص المتحرك (يظهر فقط إذا لم تنته الرحلة للطالب)
+          if (dropOffLoc == null)
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('bus_routes')
+                  .doc(busId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || !snapshot.data!.exists)
+                  return const SizedBox();
+                var data = snapshot.data!.data() as Map<String, dynamic>;
+                GeoPoint? busLoc = data['current_location'];
+                if (busLoc == null) return const SizedBox();
+
+                return MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: LatLng(busLoc.latitude, busLoc.longitude),
+                      width: 60,
+                      height: 60,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.amber,
+                          shape: BoxShape.circle,
+                          border: Border.all(width: 2),
+                        ),
+                        child: const Icon(Icons.directions_bus, size: 30),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
         ],
       ),
     );

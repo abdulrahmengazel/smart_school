@@ -16,9 +16,6 @@ class UserModel {
 
   // تحويل الكلاس إلى بيانات لرفعها لـ Firestore
   Map<String, dynamic> toMap() {
-    return {
-      'email': email,
-      'role': role,
-    };
+    return {'email': email, 'role': role};
   }
 }
