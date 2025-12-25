@@ -9,9 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'services/api_service.dart';
-import 'services/auth_service.dart';
-import 'login_screen.dart';
+import 'package:smart_school/services/api_service.dart';
+import 'package:smart_school/services/auth_service.dart';
+import 'package:smart_school/screens/login_screen.dart';
 
 class DriverScreen extends StatefulWidget {
   const DriverScreen({super.key});
@@ -636,3 +636,4 @@ class _DriverScreenState extends State<DriverScreen> {
     );
   }
 }
+

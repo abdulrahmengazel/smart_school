@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_dashboard_screen.dart';
-import 'services/auth_service.dart';
+import '../services/auth_service.dart';
 import 'parent_screen.dart'; // لاستيراد شاشة الأب
 import 'driver_screen.dart';
+import 'admin_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -159,3 +160,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
