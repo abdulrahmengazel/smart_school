@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'admin_dashboard_screen.dart';
-import '../services/auth_service.dart';
-import 'parent_screen.dart'; // لاستيراد شاشة الأب
-import 'driver_screen.dart';
-import 'admin_dashboard_screen.dart';
+// lib/screens/login_screen.dart
 
+import 'package:flutter/material.dart';
+import 'package:smart_school/services/auth_service.dart';
+import 'package:smart_school/screens/parent_screen.dart';
+import 'package:smart_school/screens/driver_screen.dart';
+import 'package:smart_school/screens/admin_dashboard_screen.dart';
+
+/// شاشة تسجيل الدخول: الواجهة الأولى التي تظهر للمستخدم للوصول إلى النظام
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -14,150 +15,124 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final AuthService _authService = AuthService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final AuthService _authService = AuthService();
   bool _isLoading = false;
-  String? _errorMessage;
 
+  /// وظيفة تسجيل الدخول والتحقق من دور المستخدم (والد، سائق، مسؤول) للانتقال للشاشة المناسبة
   void _login() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    User? user = await _authService.signIn(
+    setState(() => _isLoading = true);
+    
+    final user = await _authService.signIn(
       _emailController.text.trim(),
       _passwordController.text.trim(),
     );
 
     if (user != null) {
-      // 1. نجاح الدخول -> نفحص الدور
-      String role = await _authService.getUserRole(user.uid);
-
+      final role = await _authService.getUserRole(user.uid);
       if (!mounted) return;
 
-      if (role == 'driver') {
-        // توجيه للسائق
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DriverScreen()),
-        );
+      Widget nextScreen;
+      if (role == 'parent') {
+        nextScreen = const ParentScreen();
+      } else if (role == 'driver') {
+        nextScreen = const DriverScreen();
+      } else if (role == 'admin') {
+        nextScreen = const AdminDashboardScreen();
       } else {
-        // توجيه لولي الأمر
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const ParentScreen()),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error: User role not found.")),
         );
+        setState(() => _isLoading = false);
+        return;
       }
+
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => nextScreen));
     } else {
-      setState(() {
-        _errorMessage = "Invalid email or password";
-        _isLoading = false;
-      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Login failed. Please check your credentials.")),
+      );
     }
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.teal.shade50,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.school, size: 80, color: Colors.teal),
-              const SizedBox(height: 20),
-              const Text(
-                "Smart School",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.teal,
+      body: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 30),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.school, size: 100, color: colorScheme.primary),
+                const SizedBox(height: 20),
+                Text(
+                  "Smart School",
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
                 ),
-              ),
-              const SizedBox(height: 40),
-
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: "Email",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                  filled: true,
-                  fillColor: Colors.white,
+                Text(
+                  "Empowering Safety & Education",
+                  style: TextStyle(fontSize: 14, color: colorScheme.secondary),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: "Password",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red),
+                const SizedBox(height: 50),
+                
+                // حقل البريد الإلكتروني
+                TextField(
+                  controller: _emailController,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: "Email Address",
+                    prefixIcon: Icon(Icons.email_outlined, color: colorScheme.secondary),
+                    filled: true,
+                    fillColor: colorScheme.primaryContainer.withOpacity(0.5),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                   ),
                 ),
-
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    foregroundColor: Colors.white,
+                const SizedBox(height: 20),
+                
+                // حقل كلمة المرور
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    labelText: "Password",
+                    prefixIcon: Icon(Icons.lock_outline, color: colorScheme.secondary),
+                    filled: true,
+                    fillColor: colorScheme.primaryContainer.withOpacity(0.5),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                   ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("LOGIN", style: TextStyle(fontSize: 18)),
                 ),
-              ),
-              const SizedBox(height: 50),
-
-              // 👇 زر الأدمن السري (للمطورين)
-              TextButton.icon(
-                onPressed: () {
-                  // يجب أن تكون مسجلاً للدخول لتنفيذ عمليات الأدمن،
-                  // أو يمكنك تجاوز التحقق مؤقتاً إذا كنت فقط تريد رؤية الواجهة
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AdminDashboardScreen(),
+                const SizedBox(height: 30),
+                
+                // زر تسجيل الدخول
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      elevation: 0,
                     ),
-                  );
-                },
-                icon: const Icon(
-                  Icons.admin_panel_settings,
-                  color: Colors.blueGrey,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("LOGIN", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
                 ),
-                label: const Text(
-                  "Admin Dashboard (Dev Only)",
-                  style: TextStyle(color: Colors.blueGrey),
-                ),
-              ),
-
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
-
