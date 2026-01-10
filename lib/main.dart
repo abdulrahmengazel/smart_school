@@ -2,8 +2,8 @@
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'firebase_options.dart';
-import 'login_screen.dart'; // تأكد أن هذا موجود لاستدعاء شاشة الدخول
+import 'services/firebase_options.dart';
+import 'screens/login_screen.dart'; // تأكد أن هذا موجود لاستدعاء شاشة الدخول
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

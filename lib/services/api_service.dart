@@ -1,6 +1,5 @@
 import 'dart:convert';
-
-// import 'dart:io'; // نحذفه أو نتركه، لكن XFile يغنينا عنه في الويب
+import 'dart:developer' show log;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
@@ -10,11 +9,11 @@ import 'package:image_picker/image_picker.dart'; // <--- هذا السطر ال�
 class ApiService {
   static final String baseUrl =
       'https://walleyed-elda-sheaflike.ngrok-free.dev';
-  static const String _attendanceEndpoint = '/api/attendance/scan';
+  static const String _attendanceEndpoint = '/scan-attendance';
 
   // نستخدم XFile هنا ليدعم الويب والموبايل
   static Future<Map<String, dynamic>> scanAttendance(XFile imageFile) async {
-    final url = Uri.parse('${baseUrl}$_attendanceEndpoint');
+    final url = Uri.parse('$baseUrl$_attendanceEndpoint');
 
     try {
       var request = http.MultipartRequest('POST', url);
@@ -35,7 +34,7 @@ class ApiService {
         );
       }
 
-      print("🚀 Sending request to: $url");
+      log("🚀 Sending request to: $url");
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
 
@@ -72,7 +71,7 @@ class ApiService {
         return data;
       }
     } catch (e) {
-      print("Error fetching bus: $e");
+      log("Error fetching bus: $e");
     }
     return null; // لا يوجد باص
   }
