@@ -15,7 +15,9 @@ class ScheduleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ترتيب الأيام لضمان ظهورها بشكل صحيح
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     final List<String> orderedDays = [
       "Sunday",
       "Monday",
@@ -27,36 +29,29 @@ class ScheduleScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text("$className Schedule 📅"),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        // نبحث مباشرة باستخدام الـ ID لأننا استخدمناه كـ Document ID أثناء الإنشاء
-        stream: FirebaseFirestore.instance
-            .collection('schedules')
-            .doc(classId)
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('schedules').doc(classId).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.event_busy, size: 80, color: Colors.grey),
+                  Icon(Icons.event_busy, size: 80, color: colorScheme.onSurface.withOpacity(0.5)),
                   Text(
                     "No schedule published yet.",
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                    style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
                   ),
                 ],
               ),
             );
           }
 
-          // جلب البيانات
           var data = snapshot.data!.data() as Map<String, dynamic>;
           Map<String, dynamic> daysMap = data['days'] ?? {};
 
@@ -67,48 +62,35 @@ class ScheduleScreen extends StatelessWidget {
               String dayName = orderedDays[index];
               List<dynamic> sessions = daysMap[dayName] ?? [];
 
-              if (sessions.isEmpty)
-                return const SizedBox(); // تخطي الأيام الفارغة
+              if (sessions.isEmpty) return const SizedBox.shrink();
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ExpansionTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.indigo.shade50,
+                      color: colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       dayName.substring(0, 3).toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.indigo,
+                        color: colorScheme.onPrimaryContainer,
                       ),
                     ),
                   ),
-                  title: Text(
-                    dayName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  title: Text(dayName, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   subtitle: Text("${sessions.length} Classes"),
                   children: sessions.map((session) {
                     return ListTile(
-                      leading: const Icon(Icons.class_, color: Colors.orange),
-                      title: Text(
-                        session['subject'],
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      leading: Icon(Icons.class_, color: colorScheme.secondary),
+                      title: Text(session['subject'], style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
                       subtitle: Text(session['time']),
-                      trailing: const Icon(
-                        Icons.arrow_forward_ios,
-                        size: 12,
-                        color: Colors.grey,
-                      ),
+                      trailing: Icon(Icons.arrow_forward_ios, size: 12, color: colorScheme.onSurface.withOpacity(0.5)),
                     );
                   }).toList(),
                 ),
@@ -120,4 +102,3 @@ class ScheduleScreen extends StatelessWidget {
     );
   }
 }
-

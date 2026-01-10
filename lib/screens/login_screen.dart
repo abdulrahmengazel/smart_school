@@ -4,7 +4,6 @@ import 'admin_dashboard_screen.dart';
 import '../services/auth_service.dart';
 import 'parent_screen.dart'; // لاستيراد شاشة الأب
 import 'driver_screen.dart';
-import 'admin_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -60,82 +59,71 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.teal.shade50,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.school, size: 80, color: Colors.teal),
+              Icon(Icons.school, size: 80, color: colorScheme.primary),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 "Smart School",
-                style: TextStyle(
-                  fontSize: 24,
+                style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: Colors.teal,
+                  color: colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 40),
-
               TextField(
                 controller: _emailController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: "Email",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.email),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: colorScheme.primaryContainer,
                 ),
+                keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
-
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: "Password",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.lock),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: colorScheme.primaryContainer,
                 ),
               ),
-
               const SizedBox(height: 24),
-
               if (_errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
                     _errorMessage!,
-                    style: const TextStyle(color: Colors.red),
+                    style: TextStyle(color: colorScheme.error),
                   ),
                 ),
-
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    foregroundColor: Colors.white,
-                  ),
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? const CircularProgressIndicator()
                       : const Text("LOGIN", style: TextStyle(fontSize: 18)),
                 ),
               ),
               const SizedBox(height: 50),
-
-              // 👇 زر الأدمن السري (للمطورين)
               TextButton.icon(
                 onPressed: () {
-                  // يجب أن تكون مسجلاً للدخول لتنفيذ عمليات الأدمن،
-                  // أو يمكنك تجاوز التحقق مؤقتاً إذا كنت فقط تريد رؤية الواجهة
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -143,16 +131,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   );
                 },
-                icon: const Icon(
+                icon: Icon(
                   Icons.admin_panel_settings,
-                  color: Colors.blueGrey,
+                  color: colorScheme.secondary,
                 ),
-                label: const Text(
+                label: Text(
                   "Admin Dashboard (Dev Only)",
-                  style: TextStyle(color: Colors.blueGrey),
+                  style: TextStyle(color: colorScheme.secondary),
                 ),
               ),
-
             ],
           ),
         ),
@@ -160,4 +147,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-

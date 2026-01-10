@@ -36,7 +36,6 @@ class _DriverScreenState extends State<DriverScreen> {
   bool _isTracking = false;
   Timer? _trackingTimer;
 
-  // نوع الرحلة (صباحي افتراضياً)
   String _tripType = 'pickup';
 
   @override
@@ -49,14 +48,9 @@ class _DriverScreenState extends State<DriverScreen> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
-      var driverDoc = await FirebaseFirestore.instance
-          .collection('drivers')
-          .doc(user.uid)
-          .get();
+      var driverDoc = await FirebaseFirestore.instance.collection('drivers').doc(user.uid).get();
       if (driverDoc.exists) {
-        setState(
-          () => driverName = driverDoc.data()?['name'] ?? "Unknown Driver",
-        );
+        setState(() => driverName = driverDoc.data()?['name'] ?? "Unknown Driver");
       }
       var busQuery = await FirebaseFirestore.instance
           .collection('bus_routes')
@@ -69,26 +63,14 @@ class _DriverScreenState extends State<DriverScreen> {
           currentBusId = busQuery.docs.first.id;
           currentPlateNumber = busData['plate_number'];
           currentRouteName = busData['route_name'];
-          _isInitializing = false;
-        });
-      } else {
-        setState(() {
-          driverName = "$driverName (No Bus)";
-          _isInitializing = false;
         });
       }
-    } catch (e) {
+    } finally {
       setState(() => _isInitializing = false);
     }
   }
 
-  // --- دوال الإشعارات ---
-  Future<void> _sendNotification(
-    String parentUid,
-    String title,
-    String body,
-    String type,
-  ) async {
+  Future<void> _sendNotification(String parentUid, String title, String body, String type) async {
     if (parentUid.isEmpty || parentUid == 'Unknown') return;
     try {
       await FirebaseFirestore.instance.collection('notifications').add({
@@ -105,19 +87,13 @@ class _DriverScreenState extends State<DriverScreen> {
     }
   }
 
-  // --- دوال التتبع ---
   void _toggleTrip() async {
     if (currentBusId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("❌ No bus assigned.")));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("❌ No bus assigned.")));
       return;
     }
-    if (_isTracking) {
-      _stopTracking();
-    } else {
-      await _startTracking();
-    }
+    _isTracking ? _stopTracking() : await _startTracking();
   }
 
   Future<void> _startTracking() async {
@@ -129,64 +105,51 @@ class _DriverScreenState extends State<DriverScreen> {
 
     setState(() => _isTracking = true);
 
-    String typeText = _tripType == 'pickup'
-        ? "☀️ Morning Trip (To School)"
-        : "🌙 Afternoon Trip (To Home)";
+    String typeText = _tripType == 'pickup' ? "☀️ Morning Trip (To School)" : "🌙 Afternoon Trip (To Home)";
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("🚀 Started: $typeText"),
-        backgroundColor: Colors.green,
-      ),
+      SnackBar(content: Text("🚀 Started: $typeText"), backgroundColor: Theme.of(context).colorScheme.tertiary),
     );
 
-    await FirebaseFirestore.instance
-        .collection('bus_routes')
-        .doc(currentBusId)
-        .update({
-          'is_active': true,
-          'current_trip_type': _tripType,
-          'trip_start_time': FieldValue.serverTimestamp(),
-        });
+    await FirebaseFirestore.instance.collection('bus_routes').doc(currentBusId).update({
+      'is_active': true,
+      'current_trip_type': _tripType,
+      'trip_start_time': FieldValue.serverTimestamp(),
+    });
 
     _trackingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      Position position = await Geolocator.getCurrentPosition();
-      await FirebaseFirestore.instance
-          .collection('bus_routes')
-          .doc(currentBusId)
-          .update({
+      try {
+        Position position = await Geolocator.getCurrentPosition();
+        if (currentBusId != null) {
+          await FirebaseFirestore.instance.collection('bus_routes').doc(currentBusId).update({
             'current_location': GeoPoint(position.latitude, position.longitude),
             'last_updated': FieldValue.serverTimestamp(),
           });
+        }
+      } catch (e) {
+        log("Error getting location: $e");
+      }
     });
   }
 
-  void _stopTracking() async {
+  void _stopTracking() {
     _trackingTimer?.cancel();
     setState(() => _isTracking = false);
     if (currentBusId != null) {
-      await FirebaseFirestore.instance
-          .collection('bus_routes')
-          .doc(currentBusId)
-          .update({'is_active': false});
+      FirebaseFirestore.instance.collection('bus_routes').doc(currentBusId).update({'is_active': false});
     }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("🛑 Trip Ended."),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: const Text("🛑 Trip Ended."), backgroundColor: Theme.of(context).colorScheme.error),
     );
   }
 
-  // --- دوال الغياب ---
   void _showAbsenteesDialog() async {
     String today = DateTime.now().toString().split(' ')[0];
-    var snapshot = await FirebaseFirestore.instance
-        .collection('leaves')
-        .where('date', isEqualTo: today)
-        .get();
+    var snapshot = await FirebaseFirestore.instance.collection('leaves').where('date', isEqualTo: today).get();
 
     if (!mounted) return;
-
+    final theme = Theme.of(context);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -201,7 +164,7 @@ class _DriverScreenState extends State<DriverScreen> {
                   itemBuilder: (context, index) {
                     var data = snapshot.docs[index].data();
                     return ListTile(
-                      leading: const Icon(Icons.person_off, color: Colors.red),
+                      leading: Icon(Icons.person_off, color: theme.colorScheme.error),
                       title: Text(data['student_name'] ?? 'Unknown'),
                       subtitle: Text("Reason: ${data['reason']}"),
                     );
@@ -209,16 +172,12 @@ class _DriverScreenState extends State<DriverScreen> {
                 ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))
         ],
       ),
     );
   }
 
-  // --- معالجة الصور والحفظ ---
   Future<void> _processImage(ImageSource source) async {
     if (currentBusId == null) return;
     final XFile? photo = await _picker.pickImage(source: source);
@@ -236,143 +195,88 @@ class _DriverScreenState extends State<DriverScreen> {
       if (result['success'] == true) {
         final basicStudents = result['students'];
         List<Map<String, dynamic>> enrichedStudents = [];
-        if (basicStudents.isNotEmpty) {
-          for (var student in basicStudents) {
-            Map<String, dynamic> fullData = await _saveAndEnrichStudent(
-              student,
-            );
-            enrichedStudents.add(fullData);
-          }
-          setState(() {
-            _students = enrichedStudents;
-            _isLoading = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("✅ Students Boarded."),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          setState(() {
-            _isLoading = false;
-            message = "No students recognized.";
-          });
+        for (var student in basicStudents) {
+          enrichedStudents.add(await _saveAndEnrichStudent(student));
         }
+        setState(() => _students = enrichedStudents);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text("✅ Students Boarded."), backgroundColor: Theme.of(context).colorScheme.tertiary),
+        );
       } else {
-        setState(() {
-          _isLoading = false;
-          message = result['error'];
-        });
+        setState(() => message = result['error']);
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        message = "Error: $e";
-      });
+      setState(() => message = "Error: $e");
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<Map<String, dynamic>> _saveAndEnrichStudent(
-    Map<String, dynamic> apiStudent,
-  ) async {
+  Future<Map<String, dynamic>> _saveAndEnrichStudent(Map<String, dynamic> apiStudent) async {
     String studentId = apiStudent['id'].toString();
-    String parentPhone = "Unknown";
-    String parentUid = ""; // 👈 متغير جديد
-    String grade = "N/A";
+    final studentDoc = await FirebaseFirestore.instance.collection('students').doc(studentId).get();
+    final data = studentDoc.exists ? studentDoc.data()! : <String, dynamic>{};
 
+    Position? position;
     try {
-      final studentDoc = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(studentId)
-          .get();
-      if (studentDoc.exists) {
-        final data = studentDoc.data()!;
-        parentPhone = data['parent_phone'] ?? "No Phone";
-        parentUid = data['parent_uid'] ?? ""; // 👈 جلب معرف الأب للإشعارات
-        grade = data['grade'] ?? "N/A";
-      }
-
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied)
-        permission = await Geolocator.requestPermission();
-      Position? position;
-      if (permission == LocationPermission.whileInUse ||
-          permission == LocationPermission.always) {
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
         position = await Geolocator.getCurrentPosition();
       }
-
-      final fullData = {
-        'student_id': studentId,
-        'name': apiStudent['name'],
-        'status': 'Boarded',
-        'trip_type': _tripType,
-        'grade': grade,
-        'parent_phone': parentPhone,
-        'parent_uid': parentUid, // 👈 نحفظه محلياً لاستخدامه عند التنزيل
-        'bus_id': currentBusId,
-        'bus_plate': currentPlateNumber ?? "Unknown",
-        'route_name': currentRouteName ?? "Unknown",
-        'timestamp': FieldValue.serverTimestamp(),
-        'date': DateTime.now().toString().split(' ')[0],
-        'drop_off_time': null,
-        'location': position != null
-            ? GeoPoint(position.latitude, position.longitude)
-            : null,
-      };
-
-      DocumentReference docRef = await FirebaseFirestore.instance
-          .collection('attendance')
-          .add(fullData);
-      fullData['doc_id'] = docRef.id;
-
-      // 🔔 إرسال إشعار الركوب
-      String msg = _tripType == 'pickup'
-          ? "✅ ${apiStudent['name']} has boarded the bus to School."
-          : "✅ ${apiStudent['name']} is on the bus returning Home.";
-      await _sendNotification(parentUid, "Bus Status Update 🚌", msg, 'pickup');
-
-      return fullData;
     } catch (e) {
-      log("Error saving: $e");
-      return apiStudent;
+      log("Error getting position: $e");
     }
+
+    final fullData = {
+      'student_id': studentId,
+      'name': apiStudent['name'],
+      'status': 'Boarded',
+      'trip_type': _tripType,
+      'grade': data['grade'] ?? 'N/A',
+      'parent_phone': data['parent_phone'] ?? "No Phone",
+      'parent_uid': data['parent_uid'] ?? "",
+      'bus_id': currentBusId,
+      'bus_plate': currentPlateNumber,
+      'route_name': currentRouteName,
+      'timestamp': FieldValue.serverTimestamp(),
+      'date': DateTime.now().toString().split(' ')[0],
+      'drop_off_time': null,
+      'location': position != null ? GeoPoint(position.latitude, position.longitude) : null,
+    };
+
+    DocumentReference docRef = await FirebaseFirestore.instance.collection('attendance').add(fullData);
+    fullData['doc_id'] = docRef.id;
+
+    String msg = _tripType == 'pickup'
+        ? "✅ ${apiStudent['name']} has boarded the bus to School."
+        : "✅ ${apiStudent['name']} is on the bus returning Home.";
+    _sendNotification(data['parent_uid'] ?? "", "Bus Status Update 🚌", msg, 'pickup');
+
+    return fullData;
   }
 
   Future<void> _markAsDroppedOff(String docId, int index) async {
     try {
       Position position = await Geolocator.getCurrentPosition();
-      await FirebaseFirestore.instance
-          .collection('attendance')
-          .doc(docId)
-          .update({
-            'status': 'DroppedOff',
-            'drop_off_time': FieldValue.serverTimestamp(),
-            'drop_off_location': GeoPoint(
-              position.latitude,
-              position.longitude,
-            ),
-          });
+      await FirebaseFirestore.instance.collection('attendance').doc(docId).update({
+        'status': 'DroppedOff',
+        'drop_off_time': FieldValue.serverTimestamp(),
+        'drop_off_location': GeoPoint(position.latitude, position.longitude),
+      });
 
-      // 🔔 إرسال إشعار النزول
-      // نجلب بيانات الطالب من القائمة المحلية لإرسال الإشعار
       var studentData = _students[index];
-      String parentUid = studentData['parent_uid'] ?? "";
-      String name = studentData['name'] ?? "Student";
-
-      await _sendNotification(
-        parentUid,
+      _sendNotification(
+        studentData['parent_uid'] ?? "",
         "Arrived Safely 🏠",
-        "$name has been dropped off safely.",
+        "${studentData['name']} has been dropped off safely.",
         'dropoff',
       );
 
-      setState(() {
-        _students[index]['status'] = 'DroppedOff';
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Dropped Off & Notified ✅")));
+      setState(() => _students[index]['status'] = 'DroppedOff');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dropped Off & Notified ✅")));
     } catch (e) {
       log("Error dropping off: $e");
     }
@@ -380,8 +284,10 @@ class _DriverScreenState extends State<DriverScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isInitializing)
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    if (_isInitializing) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
       appBar: AppBar(
@@ -389,42 +295,25 @@ class _DriverScreenState extends State<DriverScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text("Driver Dashboard 🚌", style: TextStyle(fontSize: 16)),
-            Text(
-              currentRouteName ?? 'No Route',
-              style: const TextStyle(fontSize: 12),
-            ),
+            Text(currentRouteName ?? 'No Route', style: const TextStyle(fontSize: 12)),
           ],
         ),
-        backgroundColor: _isTracking ? Colors.red : Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: _isTracking ? colorScheme.error : colorScheme.primary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_off_outlined),
-            tooltip: "Check Absentees",
-            onPressed: _showAbsenteesDialog,
-          ),
+          IconButton(icon: const Icon(Icons.person_off_outlined), tooltip: "Check Absentees", onPressed: _showAbsenteesDialog),
           if (currentBusId != null)
             TextButton.icon(
               onPressed: _toggleTrip,
-              icon: Icon(
-                _isTracking ? Icons.stop_circle : Icons.play_circle_fill,
-                color: Colors.white,
-              ),
-              label: Text(
-                _isTracking ? "STOP" : "START",
-                style: const TextStyle(color: Colors.white),
-              ),
+              icon: Icon(_isTracking ? Icons.stop_circle : Icons.play_circle_fill),
+              label: Text(_isTracking ? "STOP" : "START"),
             ),
-          // 👇 زر الخروج تمت إعادته
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await AuthService().signOut();
-              if (context.mounted)
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
+              if (context.mounted) {
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+              }
             },
           ),
         ],
@@ -433,33 +322,17 @@ class _DriverScreenState extends State<DriverScreen> {
         children: [
           if (!_isTracking)
             Container(
-              color: Colors.grey[200],
+              color: colorScheme.surfaceVariant,
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    "Trip Type: ",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  const Text("Trip Type: ", style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(width: 10),
                   DropdownButton<String>(
                     value: _tripType,
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'pickup',
-                        child: Text("To School"),
-                      ),
-                      DropdownMenuItem(
-                        value: 'dropoff',
-                        child: Text("To Home"),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      setState(() {
-                        _tripType = val!;
-                      });
-                    },
+                    items: const [DropdownMenuItem(value: 'pickup', child: Text("To School")), DropdownMenuItem(value: 'dropoff', child: Text("To Home"))],
+                    onChanged: (val) => setState(() => _tripType = val!),
                   ),
                 ],
               ),
@@ -467,59 +340,40 @@ class _DriverScreenState extends State<DriverScreen> {
           if (_isTracking)
             Container(
               width: double.infinity,
-              color: Colors.redAccent,
+              color: colorScheme.error,
               padding: const EdgeInsets.all(8),
               child: Text(
                 "📡 LIVE TRACKING: ${_tripType == 'pickup' ? 'To School' : 'To Home'}",
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: colorScheme.onError, fontWeight: FontWeight.bold),
               ),
             ),
-
           Expanded(
             flex: 2,
             child: Container(
               width: double.infinity,
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: colorScheme.surfaceVariant,
                 borderRadius: BorderRadius.circular(15),
               ),
               child: _selectedImage != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(15),
                       child: kIsWeb
-                          ? Image.network(
-                              _selectedImage!.path,
-                              fit: BoxFit.cover,
-                            )
-                          : Image.file(
-                              File(_selectedImage!.path),
-                              fit: BoxFit.cover,
-                            ),
+                          ? Image.network(_selectedImage!.path, fit: BoxFit.cover)
+                          : Image.file(File(_selectedImage!.path), fit: BoxFit.cover),
                     )
-                  : const Center(
-                      child: Icon(
-                        Icons.camera_enhance,
-                        size: 60,
-                        color: Colors.grey,
-                      ),
-                    ),
+                  : Center(child: Icon(Icons.camera_enhance, size: 60, color: colorScheme.onSurfaceVariant.withOpacity(0.5))),
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: (_isLoading || currentBusId == null)
-                        ? null
-                        : () => _processImage(ImageSource.camera),
+                    onPressed: (_isLoading || currentBusId == null) ? null : () => _processImage(ImageSource.camera),
                     icon: const Icon(Icons.camera_alt),
                     label: const Text("Scan Face"),
                   ),
@@ -527,9 +381,7 @@ class _DriverScreenState extends State<DriverScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: (_isLoading || currentBusId == null)
-                        ? null
-                        : () => _processImage(ImageSource.gallery),
+                    onPressed: (_isLoading || currentBusId == null) ? null : () => _processImage(ImageSource.gallery),
                     icon: const Icon(Icons.photo),
                     label: const Text("Gallery"),
                   ),
@@ -537,9 +389,7 @@ class _DriverScreenState extends State<DriverScreen> {
               ],
             ),
           ),
-
           const Divider(height: 30),
-
           Expanded(
             flex: 3,
             child: _isLoading
@@ -549,83 +399,53 @@ class _DriverScreenState extends State<DriverScreen> {
                     itemBuilder: (context, index) {
                       final student = _students[index];
                       bool isBoarded = student['status'] == 'Boarded';
-                      return Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.5),
-                              blurRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 25,
-                                  backgroundColor: Colors.teal.shade100,
-                                  child: Text(
-                                    student['name'][0],
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 25,
+                                    backgroundColor: colorScheme.primaryContainer,
+                                    child: Text(
+                                      student['name']?.isNotEmpty == true ? student['name'][0] : '?',
+                                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 15),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      student['name'],
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  const SizedBox(width: 15),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(student['name'], style: theme.textTheme.titleLarge),
+                                        Text(
+                                          _tripType == 'pickup' ? "To School 🏫" : "To Home 🏠",
+                                          style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
+                                        ),
+                                      ],
                                     ),
-                                    Text(
-                                      _tripType == 'pickup'
-                                          ? "To School 🏫"
-                                          : "To Home 🏠",
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const Spacer(),
-                                if (isBoarded)
-                                  const Icon(
-                                    Icons.directions_bus,
-                                    color: Colors.green,
                                   ),
-                              ],
-                            ),
-                            if (isBoarded) ...[
-                              const SizedBox(height: 10),
-                              ElevatedButton(
-                                onPressed: () =>
-                                    _markAsDroppedOff(student['doc_id'], index),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.redAccent,
-                                  minimumSize: const Size(double.infinity, 40),
-                                ),
-                                child: const Text(
-                                  "DROP OFF",
-                                  style: TextStyle(color: Colors.white),
-                                ),
+                                  if (isBoarded) Icon(Icons.directions_bus, color: colorScheme.tertiary),
+                                ],
                               ),
+                              if (isBoarded) ...[
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: () => _markAsDroppedOff(student['doc_id'], index),
+                                    style: ElevatedButton.styleFrom(backgroundColor: colorScheme.error),
+                                    child: const Text("DROP OFF"),
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       );
                     },
@@ -636,4 +456,3 @@ class _DriverScreenState extends State<DriverScreen> {
     );
   }
 }
-

@@ -3,69 +3,69 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class AttendanceCard extends StatelessWidget {
-  final String title;
   final String time;
   final String date;
   final String busPlate;
   final bool hasLocation;
-  final Color statusColor;
-  final IconData statusIcon;
   final VoidCallback? onTap;
+  final String status;
 
   const AttendanceCard({
     super.key,
-    required this.title,
     required this.time,
     required this.date,
     required this.busPlate,
     required this.hasLocation,
-    required this.statusColor,
-    required this.statusIcon,
+    required this.status,
     this.onTap,
   });
 
   factory AttendanceCard.fromData(Map<String, dynamic> data, {VoidCallback? onTap}) {
-    String status = data['status'] ?? 'Absent';
-    bool hasLocation = data['location'] != null;
     Timestamp? timestamp = data['timestamp'];
 
-    Color statusColor;
-    IconData statusIcon;
-    String statusText;
-
-    if (status == 'Present') {
-      statusColor = Colors.green;
-      statusIcon = Icons.check_circle;
-      statusText = "Arrived On Time";
-    } else if (status == 'Late') {
-      statusColor = Colors.orange;
-      statusIcon = Icons.warning_amber_rounded;
-      statusText = "Arrived Late";
-    } else {
-      statusColor = Colors.red;
-      statusIcon = Icons.cancel;
-      statusText = "Absent";
-    }
-
     return AttendanceCard(
-      title: statusText,
+      status: data['status'] ?? 'Absent',
       time: timestamp != null ? DateFormat('hh:mm a').format(timestamp.toDate()) : "--:--",
       date: timestamp != null ? DateFormat('MMM dd, yyyy').format(timestamp.toDate()) : "Unknown",
       busPlate: data['bus_plate'] ?? 'N/A',
-      hasLocation: hasLocation,
-      statusColor: statusColor,
-      statusIcon: statusIcon,
+      hasLocation: data['location'] != null,
       onTap: onTap,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final Color statusColor;
+    final IconData statusIcon;
+    final String statusText;
+
+    switch (status) {
+      case 'Present':
+        statusColor = colorScheme.tertiary;
+        statusIcon = Icons.check_circle;
+        statusText = "Arrived On Time";
+        break;
+      case 'Late':
+        statusColor = colorScheme.secondary;
+        statusIcon = Icons.warning_amber_rounded;
+        statusText = "Arrived Late";
+        break;
+      default: // 'Absent'
+        statusColor = colorScheme.error;
+        statusIcon = Icons.cancel;
+        statusText = "Absent";
+        break;
+    }
+
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       clipBehavior: Clip.antiAlias,
+      color: colorScheme.primaryContainer,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -75,7 +75,7 @@ class AttendanceCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: statusColor.withAlpha(25),
+                  color: statusColor.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(statusIcon, color: statusColor, size: 30),
@@ -88,36 +88,35 @@ class AttendanceCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          title,
-                          style: TextStyle(
+                          statusText,
+                          style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: statusColor.withAlpha(204),
+                            color: statusColor,
                           ),
                         ),
                         if (hasLocation)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 5),
-                            child: Icon(Icons.location_on, color: Colors.red, size: 16),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 5),
+                            child: Icon(Icons.location_on, color: colorScheme.error, size: 16),
                           ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text("Bus: $busPlate",
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                        style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7))),
                     Text(date,
-                        style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                        style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.5))),
                     if (hasLocation)
                       Text("Tap to track location 📍",
-                          style: TextStyle(color: Colors.indigo[300], fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: theme.textTheme.labelSmall?.copyWith(color: colorScheme.secondary, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
               Column(
                 children: [
                   Text(time,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.indigo)),
-                  const Text("TIME", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                  Text("TIME", style: theme.textTheme.labelSmall),
                 ],
               ),
             ],

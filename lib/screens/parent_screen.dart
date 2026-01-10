@@ -27,12 +27,6 @@ class _ParentScreenState extends State<ParentScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime(2024),
       lastDate: DateTime.now(),
-      builder: (context, child) => Theme(
-        data: ThemeData.light().copyWith(
-          colorScheme: const ColorScheme.light(primary: Colors.indigo),
-        ),
-        child: child!,
-      ),
     );
     if (picked != null && picked != _selectedDate) {
       setState(() => _selectedDate = picked);
@@ -58,13 +52,10 @@ class _ParentScreenState extends State<ParentScreen> {
     );
   }
 
-  // دالة طلب الغياب
   Future<void> _requestAbsence(String studentId, String studentName) async {
-    // 1. اختيار التاريخ
     DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: DateTime.now().add(const Duration(days: 1)),
-      // الافتراضي غداً
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 30)),
       helpText: "Select Absence Date 📅",
@@ -74,8 +65,8 @@ class _ParentScreenState extends State<ParentScreen> {
 
     String dateStr = pickedDate.toString().split(' ')[0];
 
-    // 2. تأكيد الطلب
     if (!mounted) return;
+    final theme = Theme.of(context);
     bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -89,8 +80,8 @@ class _ParentScreenState extends State<ParentScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: theme.colorScheme.error,
+              foregroundColor: theme.colorScheme.onError,
             ),
             child: const Text("Confirm"),
           ),
@@ -109,26 +100,28 @@ class _ParentScreenState extends State<ParentScreen> {
           'created_at': FieldValue.serverTimestamp(),
         });
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("✅ Absence recorded for $dateStr"),
-            backgroundColor: Colors.orange,
+            backgroundColor: theme.colorScheme.secondary,
           ),
         );
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     }
   }
 
-  // ودجت صغيرة لعرض سطر الرحلة (صباحي أو مسائي)
   Widget _buildTripRow(
     String title,
     IconData icon,
     Map<String, dynamic>? record,
   ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     String status = record?['status'] ?? 'Waiting';
     bool hasRecord = record != null;
 
@@ -137,27 +130,23 @@ class _ParentScreenState extends State<ParentScreen> {
     VoidCallback? onTap;
 
     if (!hasRecord) {
-      color = Colors.grey;
+      color = colorScheme.onSurface.withOpacity(0.5);
       statusText = "No record yet";
-      onTap = null;
     } else if (status == 'Boarded') {
-      color = Colors.green;
+      color = colorScheme.tertiary;
       statusText = "On Bus (Live) 📍";
       onTap = () => _openMap(context, record);
     } else if (status == 'DroppedOff') {
-      color = Colors.indigo;
+      color = colorScheme.primary;
       String time = "";
       if (record['drop_off_time'] != null) {
-        time = DateFormat(
-          'h:mm a',
-        ).format((record['drop_off_time'] as Timestamp).toDate());
+        time = DateFormat('h:mm a').format((record['drop_off_time'] as Timestamp).toDate());
       }
       statusText = "Arrived ($time) ✅";
-      onTap = () => _openMap(context, record); // لرؤية التفاصيل
+      onTap = () => _openMap(context, record);
     } else {
-      color = Colors.orange;
+      color = colorScheme.secondary;
       statusText = "Waiting...";
-      onTap = null;
     }
 
     return InkWell(
@@ -166,37 +155,28 @@ class _ParentScreenState extends State<ParentScreen> {
         margin: const EdgeInsets.only(top: 10),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.grey[50],
+          color: colorScheme.primaryContainer.withOpacity(0.5),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: colorScheme.primaryContainer),
         ),
         child: Row(
           children: [
-            Icon(icon, color: hasRecord ? color : Colors.grey, size: 24),
+            Icon(icon, color: color, size: 24),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: theme.textTheme.titleMedium),
+                  Text(
+                    statusText,
+                    style: theme.textTheme.bodySmall?.copyWith(color: color, fontWeight: FontWeight.w500),
                   ),
-                ),
-                Text(
-                  statusText,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-            const Spacer(),
-            if (hasRecord)
-              Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
+            if (onTap != null)
+              Icon(Icons.arrow_forward_ios, size: 14, color: colorScheme.onSurface.withOpacity(0.5)),
           ],
         ),
       ),
@@ -205,6 +185,8 @@ class _ParentScreenState extends State<ParentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     String formattedDate = _selectedDate.toString().split(' ')[0];
     bool isToday = formattedDate == DateTime.now().toString().split(' ')[0];
 
@@ -222,8 +204,6 @@ class _ParentScreenState extends State<ParentScreen> {
             ),
           ],
         ),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
         actions: [
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -232,23 +212,17 @@ class _ParentScreenState extends State<ParentScreen> {
                 .where('is_read', isEqualTo: false)
                 .snapshots(),
             builder: (context, snapshot) {
-              int count = 0;
-              if (snapshot.hasData) count = snapshot.data!.docs.length;
+              int count = snapshot.data?.docs.length ?? 0;
 
               return Stack(
                 alignment: Alignment.center,
                 children: [
                   IconButton(
                     icon: const Icon(Icons.notifications),
-                    onPressed: () {
-                      // الانتقال لشاشة الإشعارات
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NotificationsScreen(),
-                        ),
-                      );
-                    },
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+                    ),
                   ),
                   if (count > 0)
                     Positioned(
@@ -257,20 +231,13 @@ class _ParentScreenState extends State<ParentScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: Colors.red,
+                          color: colorScheme.error,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                         child: Text(
                           '$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: TextStyle(color: colorScheme.onError, fontSize: 10, fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -279,10 +246,7 @@ class _ParentScreenState extends State<ParentScreen> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.calendar_month),
-            onPressed: _pickDate,
-          ),
+          IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pickDate),
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -296,207 +260,125 @@ class _ParentScreenState extends State<ParentScreen> {
           if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty)
             return const Center(child: Text("No children linked."));
 
-          var studentsDocs = studentSnapshot.data!.docs;
-
           return ListView.builder(
-            itemCount: studentsDocs.length,
+            itemCount: studentSnapshot.data!.docs.length,
             padding: const EdgeInsets.all(16),
             itemBuilder: (context, index) {
-              var studentData =
-                  studentsDocs[index].data() as Map<String, dynamic>;
-              String studentId = studentsDocs[index].id;
+              var studentDoc = studentSnapshot.data!.docs[index];
+              var studentData = studentDoc.data() as Map<String, dynamic>;
               String studentName = studentData['name'] ?? "Unknown";
 
               return StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('attendance')
-                    .where('student_id', isEqualTo: studentId)
+                    .where('student_id', isEqualTo: studentDoc.id)
                     .where('date', isEqualTo: formattedDate)
-                    .orderBy('timestamp', descending: true) // نجلب الكل مرتبين
-                    .snapshots(), // 👈 أزلنا limit(1)
+                    .orderBy('timestamp', descending: true)
+                    .snapshots(),
                 builder: (context, attendanceSnapshot) {
                   Map<String, dynamic>? morningRecord;
                   Map<String, dynamic>? afternoonRecord;
 
-                  if (attendanceSnapshot.hasData &&
-                      attendanceSnapshot.data!.docs.isNotEmpty) {
-                    var docs = attendanceSnapshot.data!.docs;
-
-                    // تصفية السجلات حسب نوع الرحلة
-                    try {
-                      var morningDoc = docs.firstWhere(
-                        (d) => d['trip_type'] == 'pickup',
-                      );
-                      morningRecord = morningDoc.data() as Map<String, dynamic>;
-                    } catch (e) {
-                      /* No morning trip */
-                    }
-
-                    try {
-                      var afternoonDoc = docs.firstWhere(
-                        (d) => d['trip_type'] == 'dropoff',
-                      );
-                      afternoonRecord =
-                          afternoonDoc.data() as Map<String, dynamic>;
-                    } catch (e) {
-                      /* No afternoon trip */
+                  if (attendanceSnapshot.hasData && attendanceSnapshot.data!.docs.isNotEmpty) {
+                    for (var doc in attendanceSnapshot.data!.docs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      if (data['trip_type'] == 'pickup') morningRecord = data;
+                      if (data['trip_type'] == 'dropoff') afternoonRecord = data;
                     }
                   }
 
                   return Card(
                     elevation: 3,
                     margin: const EdgeInsets.only(bottom: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // رأس الكرت (اسم الطالب)
                           Row(
                             children: [
                               CircleAvatar(
                                 radius: 25,
-                                backgroundColor: Colors.indigo.shade100,
+                                backgroundColor: colorScheme.primaryContainer,
                                 child: Text(
-                                  studentName[0],
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  studentName.isNotEmpty ? studentName[0] : '?',
+                                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer),
                                 ),
                               ),
                               const SizedBox(width: 15),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    studentName,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  Text(studentName, style: theme.textTheme.titleLarge),
                                   Text(
                                     "Grade: ${studentData['grade'] ?? 'N/A'}",
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
+                                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
                                   ),
                                 ],
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-
-                          // زر فتح الجدول الدراسي
                           const SizedBox(height: 15),
-
-                          // صف يحتوي على الزرين (الجدول + الواجبات)
                           Row(
                             children: [
-                              // 1. زر الجدول
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () {
-                                    String classId =
-                                        studentData['class_id'] ?? '';
-                                    String className =
-                                        studentData['class_name'] ?? 'Class';
+                                    String classId = studentData['class_id'] ?? '';
                                     if (classId.isNotEmpty) {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
                                           builder: (context) => ScheduleScreen(
                                             classId: classId,
-                                            className: className,
+                                            className: studentData['class_name'] ?? 'Class',
                                           ),
                                         ),
                                       );
                                     }
                                   },
-                                  icon: const Icon(
-                                    Icons.calendar_month,
-                                    size: 18,
-                                  ),
-                                  label: const Text(
-                                    "SCHEDULE",
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.indigo,
-                                  ),
+                                  icon: const Icon(Icons.calendar_month, size: 18),
+                                  label: const Text("SCHEDULE", style: TextStyle(fontSize: 12)),
                                 ),
                               ),
-
                               const SizedBox(width: 10),
-
-                              // 2. زر الواجبات (الجديد)
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () {
-                                    // تأكد من استيراد ملف assignments_screen.dart في الأعلى
-                                    String classId =
-                                        studentData['class_id'] ?? '';
-                                    String className =
-                                        studentData['class_name'] ?? 'Class';
+                                    String classId = studentData['class_id'] ?? '';
                                     if (classId.isNotEmpty) {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (context) =>
-                                              AssignmentsScreen(
-                                                classId: classId,
-                                                className: className,
-                                              ),
+                                          builder: (context) => AssignmentsScreen(
+                                            classId: classId,
+                                            className: studentData['class_name'] ?? 'Class',
+                                          ),
                                         ),
                                       );
                                     }
                                   },
                                   icon: const Icon(Icons.assignment, size: 18),
-                                  label: const Text(
-                                    "HOMEWORK",
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.deepOrange,
-                                  ),
+                                  label: const Text("HOMEWORK", style: TextStyle(fontSize: 12)),
                                 ),
                               ),
                             ],
                           ),
-                          // ... تحت صف الأزرار السابق (Schedule & Homework) ...
                           const SizedBox(height: 10),
-
-                          // زر الإبلاغ عن غياب
                           SizedBox(
                             width: double.infinity,
                             child: TextButton.icon(
-                              onPressed: () =>
-                                  _requestAbsence(studentId, studentName),
-                              icon: const Icon(
-                                Icons.sick,
-                                size: 20,
-                                color: Colors.redAccent,
-                              ),
-                              label: const Text(
-                                "REPORT ABSENCE / SICK LEAVE",
-                                style: TextStyle(color: Colors.redAccent),
-                              ),
+                              onPressed: () => _requestAbsence(studentDoc.id, studentName),
+                              icon: Icon(Icons.sick, size: 20, color: colorScheme.error),
+                              label: Text("REPORT ABSENCE / SICK LEAVE", style: TextStyle(color: colorScheme.error)),
                               style: TextButton.styleFrom(
-                                backgroundColor: Colors.red.shade50,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
+                                backgroundColor: colorScheme.errorContainer.withOpacity(0.3),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                               ),
                             ),
                           ),
                           const SizedBox(height: 10),
-
-                          // زر نتائج الامتحانات
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
@@ -505,7 +387,7 @@ class _ParentScreenState extends State<ParentScreen> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => ExamResultsScreen(
-                                      studentId: studentId,
+                                      studentId: studentDoc.id,
                                       studentName: studentName,
                                     ),
                                   ),
@@ -513,31 +395,11 @@ class _ParentScreenState extends State<ParentScreen> {
                               },
                               icon: const Icon(Icons.school),
                               label: const Text("VIEW EXAM RESULTS 🎓"),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                              ),
                             ),
                           ),
-
                           const Divider(height: 25),
-
-                          // 1. الرحلة الصباحية (Pickup)
-                          _buildTripRow(
-                            "Morning Trip (To School)",
-                            Icons.wb_sunny,
-                            morningRecord,
-                          ),
-
-                          // 2. الرحلة المسائية (Dropoff)
-                          _buildTripRow(
-                            "Afternoon Trip (To Home)",
-                            Icons.nights_stay,
-                            afternoonRecord,
-                          ),
+                          _buildTripRow("Morning Trip (To School)", Icons.wb_sunny, morningRecord),
+                          _buildTripRow("Afternoon Trip (To Home)", Icons.nights_stay, afternoonRecord),
                         ],
                       ),
                     ),
@@ -551,4 +413,3 @@ class _ParentScreenState extends State<ParentScreen> {
     );
   }
 }
-
