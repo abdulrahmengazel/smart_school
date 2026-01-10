@@ -1,0 +1,4102 @@
+Index: smart_school/lib/screens/map_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/map_screen.dart b/smart_school/lib/screens/map_screen.dart
+--- a/smart_school/lib/screens/map_screen.dart
++++ b/smart_school/lib/screens/map_screen.dart	(date 1768073071322)
+@@ -1,15 +1,14 @@
+-// lib/screens/map_screen.dart
++// lib/map_screen.dart
+ 
+ import 'package:flutter/material.dart';
+ import 'package:flutter_map/flutter_map.dart';
+ import 'package:latlong2/latlong.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
+ 
+-/// شاشة الخريطة: تعرض مسار الطالب الحي، نقطة الركوب، ونقطة النزول، مع تتبع موقع الحافلة
+ class MapScreen extends StatelessWidget {
+-  final double startLat; 
++  final double startLat; // مكان الركوب
+   final double startLng;
+-  final GeoPoint? dropOffLoc; 
++  final GeoPoint? dropOffLoc; // 👈 مكان النزول (قد يكون null إذا لم ينزل بعد)
+   final String studentName;
+   final String busId;
+ 
+@@ -17,24 +16,22 @@
+     super.key,
+     required this.startLat,
+     required this.startLng,
+-    this.dropOffLoc,
++    this.dropOffLoc, // 👈 اختياري
+     required this.studentName,
+     required this.busId,
+   });
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final colorScheme = Theme.of(context).colorScheme;
+-
+     return Scaffold(
+       appBar: AppBar(
+-        title: Text("$studentName's Trip 🗺️"),
+-        backgroundColor: colorScheme.surface,
+-        foregroundColor: colorScheme.onSurface,
++        title: const Text("Trip Details 🗺️"),
++        backgroundColor: Colors.indigo,
++        foregroundColor: Colors.white,
+       ),
+       body: FlutterMap(
+         options: MapOptions(
+-          // تركيز الخريطة على مكان النزول إذا وصل الطالب، وإلا على مكان الركوب
++          // إذا نزل الطالب نركز الكاميرا على مكان النزول، وإلا على مكان الركوب
+           initialCenter: dropOffLoc != null
+               ? LatLng(dropOffLoc!.latitude, dropOffLoc!.longitude)
+               : LatLng(startLat, startLng),
+@@ -44,34 +41,25 @@
+           TileLayer(
+             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+             userAgentPackageName: 'com.example.smart_school',
+-            tileBuilder: (context, tileWidget, tile) {
+-              // جعل الخريطة داكنة لتناسب الهوية البصرية الجديدة
+-              return ColorFiltered(
+-                colorFilter: const ColorFilter.matrix([
+-                  -0.21, -0.72, -0.07, 0, 255,
+-                  -0.21, -0.72, -0.07, 0, 255,
+-                  -0.21, -0.72, -0.07, 0, 255,
+-                  0, 0, 0, 1, 0,
+-                ]),
+-                child: tileWidget,
+-              );
+-            },
+           ),
+ 
+-          // 1. علامة نقطة الركوب (بداية الرحلة)
++          // 1. نقطة الركوب (خضراء)
+           MarkerLayer(
+             markers: [
+               Marker(
+                 point: LatLng(startLat, startLng),
+                 width: 80,
+                 height: 80,
+-                child: Column(
++                child: const Column(
+                   children: [
+-                    const Icon(Icons.location_on, color: Colors.greenAccent, size: 40),
+-                    Container(
+-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+-                      decoration: BoxDecoration(color: colorScheme.surface, borderRadius: BorderRadius.circular(5)),
+-                      child: const Text("Start", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white)),
++                    Icon(Icons.location_on, color: Colors.green, size: 40),
++                    Text(
++                      "Start",
++                      style: TextStyle(
++                        fontWeight: FontWeight.bold,
++                        fontSize: 10,
++                        backgroundColor: Colors.white,
++                      ),
+                     ),
+                   ],
+                 ),
+@@ -79,7 +67,7 @@
+             ],
+           ),
+ 
+-          // 2. علامة نقطة النزول (نهاية الرحلة) - تظهر فقط عند وصول الطالب
++          // 2. نقطة النزول (حمراء) - تظهر فقط إذا توفرت البيانات
+           if (dropOffLoc != null)
+             MarkerLayer(
+               markers: [
+@@ -87,13 +75,16 @@
+                   point: LatLng(dropOffLoc!.latitude, dropOffLoc!.longitude),
+                   width: 80,
+                   height: 80,
+-                  child: Column(
++                  child: const Column(
+                     children: [
+-                      const Icon(Icons.location_on, color: Colors.redAccent, size: 40),
+-                      Container(
+-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+-                        decoration: BoxDecoration(color: colorScheme.surface, borderRadius: BorderRadius.circular(5)),
+-                        child: const Text("Arrived", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white)),
++                      Icon(Icons.location_on, color: Colors.red, size: 40),
++                      Text(
++                        "Drop Off",
++                        style: TextStyle(
++                          fontWeight: FontWeight.bold,
++                          fontSize: 10,
++                          backgroundColor: Colors.white,
++                        ),
+                       ),
+                     ],
+                   ),
+@@ -101,12 +92,16 @@
+               ],
+             ),
+ 
+-          // 3. تتبع موقع الحافلة الحي (يختفي بمجرد نزول الطالب)
++          // 3. الباص المتحرك (يظهر فقط إذا لم تنته الرحلة للطالب)
+           if (dropOffLoc == null)
+             StreamBuilder<DocumentSnapshot>(
+-              stream: FirebaseFirestore.instance.collection('bus_routes').doc(busId).snapshots(),
++              stream: FirebaseFirestore.instance
++                  .collection('bus_routes')
++                  .doc(busId)
++                  .snapshots(),
+               builder: (context, snapshot) {
+-                if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
++                if (!snapshot.hasData || !snapshot.data!.exists)
++                  return const SizedBox();
+                 var data = snapshot.data!.data() as Map<String, dynamic>;
+                 GeoPoint? busLoc = data['current_location'];
+                 if (busLoc == null) return const SizedBox();
+@@ -119,12 +114,11 @@
+                       height: 60,
+                       child: Container(
+                         decoration: BoxDecoration(
+-                          color: colorScheme.primary,
++                          color: Colors.amber,
+                           shape: BoxShape.circle,
+-                          border: Border.all(color: Colors.white, width: 2),
+-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)],
++                          border: Border.all(width: 2),
+                         ),
+-                        child: const Icon(Icons.directions_bus, size: 30, color: Colors.white),
++                        child: const Icon(Icons.directions_bus, size: 30),
+                       ),
+                     ),
+                   ],
+@@ -136,3 +130,4 @@
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/login_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/login_screen.dart b/smart_school/lib/screens/login_screen.dart
+--- a/smart_school/lib/screens/login_screen.dart
++++ b/smart_school/lib/screens/login_screen.dart	(date 1768073071315)
+@@ -1,12 +1,11 @@
+-// lib/screens/login_screen.dart
+-
+ import 'package:flutter/material.dart';
+-import 'package:smart_school/services/auth_service.dart';
+-import 'package:smart_school/screens/parent_screen.dart';
+-import 'package:smart_school/screens/driver_screen.dart';
+-import 'package:smart_school/screens/admin_dashboard_screen.dart';
++import 'package:firebase_auth/firebase_auth.dart';
++import 'admin_dashboard_screen.dart';
++import '../services/auth_service.dart';
++import 'parent_screen.dart'; // لاستيراد شاشة الأب
++import 'driver_screen.dart';
++import 'admin_dashboard_screen.dart';
+ 
+-/// شاشة تسجيل الدخول: الواجهة الأولى التي تظهر للمستخدم للوصول إلى النظام
+ class LoginScreen extends StatefulWidget {
+   const LoginScreen({super.key});
+ 
+@@ -15,124 +14,150 @@
+ }
+ 
+ class _LoginScreenState extends State<LoginScreen> {
++  final AuthService _authService = AuthService();
+   final TextEditingController _emailController = TextEditingController();
+   final TextEditingController _passwordController = TextEditingController();
+-  final AuthService _authService = AuthService();
+   bool _isLoading = false;
++  String? _errorMessage;
+ 
+-  /// وظيفة تسجيل الدخول والتحقق من دور المستخدم (والد، سائق، مسؤول) للانتقال للشاشة المناسبة
+   void _login() async {
+-    setState(() => _isLoading = true);
+-    
+-    final user = await _authService.signIn(
++    setState(() {
++      _isLoading = true;
++      _errorMessage = null;
++    });
++
++    User? user = await _authService.signIn(
+       _emailController.text.trim(),
+       _passwordController.text.trim(),
+     );
+ 
+     if (user != null) {
+-      final role = await _authService.getUserRole(user.uid);
++      // 1. نجاح الدخول -> نفحص الدور
++      String role = await _authService.getUserRole(user.uid);
++
+       if (!mounted) return;
+ 
+-      Widget nextScreen;
+-      if (role == 'parent') {
+-        nextScreen = const ParentScreen();
+-      } else if (role == 'driver') {
+-        nextScreen = const DriverScreen();
+-      } else if (role == 'admin') {
+-        nextScreen = const AdminDashboardScreen();
++      if (role == 'driver') {
++        // توجيه للسائق
++        Navigator.pushReplacement(
++          context,
++          MaterialPageRoute(builder: (context) => const DriverScreen()),
++        );
+       } else {
+-        ScaffoldMessenger.of(context).showSnackBar(
+-          const SnackBar(content: Text("Error: User role not found.")),
++        // توجيه لولي الأمر
++        Navigator.pushReplacement(
++          context,
++          MaterialPageRoute(builder: (context) => const ParentScreen()),
+         );
+-        setState(() => _isLoading = false);
+-        return;
+       }
+-
+-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => nextScreen));
+     } else {
+-      if (!mounted) return;
+-      ScaffoldMessenger.of(context).showSnackBar(
+-        const SnackBar(content: Text("Login failed. Please check your credentials.")),
+-      );
++      setState(() {
++        _errorMessage = "Invalid email or password";
++        _isLoading = false;
++      });
+     }
+-    setState(() => _isLoading = false);
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final colorScheme = Theme.of(context).colorScheme;
+-
+     return Scaffold(
+-      body: Container(
+-        padding: const EdgeInsets.symmetric(horizontal: 30),
+-        child: Center(
+-          child: SingleChildScrollView(
+-            child: Column(
+-              mainAxisAlignment: MainAxisAlignment.center,
+-              children: [
+-                Icon(Icons.school, size: 100, color: colorScheme.primary),
+-                const SizedBox(height: 20),
+-                Text(
+-                  "Smart School",
+-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
++      backgroundColor: Colors.teal.shade50,
++      body: Center(
++        child: SingleChildScrollView(
++          padding: const EdgeInsets.all(24.0),
++          child: Column(
++            mainAxisAlignment: MainAxisAlignment.center,
++            children: [
++              const Icon(Icons.school, size: 80, color: Colors.teal),
++              const SizedBox(height: 20),
++              const Text(
++                "Smart School",
++                style: TextStyle(
++                  fontSize: 24,
++                  fontWeight: FontWeight.bold,
++                  color: Colors.teal,
+                 ),
+-                Text(
+-                  "Empowering Safety & Education",
+-                  style: TextStyle(fontSize: 14, color: colorScheme.secondary),
+-                ),
+-                const SizedBox(height: 50),
+-                
+-                // حقل البريد الإلكتروني
+-                TextField(
+-                  controller: _emailController,
+-                  style: TextStyle(color: colorScheme.onSurface),
+-                  decoration: InputDecoration(
+-                    labelText: "Email Address",
+-                    prefixIcon: Icon(Icons.email_outlined, color: colorScheme.secondary),
+-                    filled: true,
+-                    fillColor: colorScheme.primaryContainer.withOpacity(0.5),
+-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+-                  ),
+-                ),
+-                const SizedBox(height: 20),
+-                
+-                // حقل كلمة المرور
+-                TextField(
+-                  controller: _passwordController,
+-                  obscureText: true,
+-                  style: TextStyle(color: colorScheme.onSurface),
+-                  decoration: InputDecoration(
+-                    labelText: "Password",
+-                    prefixIcon: Icon(Icons.lock_outline, color: colorScheme.secondary),
+-                    filled: true,
+-                    fillColor: colorScheme.primaryContainer.withOpacity(0.5),
+-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
++              ),
++              const SizedBox(height: 40),
++
++              TextField(
++                controller: _emailController,
++                decoration: const InputDecoration(
++                  labelText: "Email",
++                  border: OutlineInputBorder(),
++                  prefixIcon: Icon(Icons.email),
++                  filled: true,
++                  fillColor: Colors.white,
++                ),
++              ),
++              const SizedBox(height: 16),
++
++              TextField(
++                controller: _passwordController,
++                obscureText: true,
++                decoration: const InputDecoration(
++                  labelText: "Password",
++                  border: OutlineInputBorder(),
++                  prefixIcon: Icon(Icons.lock),
++                  filled: true,
++                  fillColor: Colors.white,
++                ),
++              ),
++
++              const SizedBox(height: 24),
++
++              if (_errorMessage != null)
++                Padding(
++                  padding: const EdgeInsets.only(bottom: 16),
++                  child: Text(
++                    _errorMessage!,
++                    style: const TextStyle(color: Colors.red),
+                   ),
+                 ),
+-                const SizedBox(height: 30),
+-                
+-                // زر تسجيل الدخول
+-                SizedBox(
+-                  width: double.infinity,
+-                  height: 55,
+-                  child: ElevatedButton(
+-                    onPressed: _isLoading ? null : _login,
+-                    style: ElevatedButton.styleFrom(
+-                      backgroundColor: colorScheme.primary,
+-                      foregroundColor: colorScheme.onPrimary,
+-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+-                      elevation: 0,
+-                    ),
+-                    child: _isLoading
+-                        ? const CircularProgressIndicator(color: Colors.white)
+-                        : const Text("LOGIN", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+-                  ),
++
++              SizedBox(
++                width: double.infinity,
++                height: 50,
++                child: ElevatedButton(
++                  onPressed: _isLoading ? null : _login,
++                  style: ElevatedButton.styleFrom(
++                    backgroundColor: Colors.teal,
++                    foregroundColor: Colors.white,
++                  ),
++                  child: _isLoading
++                      ? const CircularProgressIndicator(color: Colors.white)
++                      : const Text("LOGIN", style: TextStyle(fontSize: 18)),
++                ),
++              ),
++              const SizedBox(height: 50),
++
++              // 👇 زر الأدمن السري (للمطورين)
++              TextButton.icon(
++                onPressed: () {
++                  // يجب أن تكون مسجلاً للدخول لتنفيذ عمليات الأدمن،
++                  // أو يمكنك تجاوز التحقق مؤقتاً إذا كنت فقط تريد رؤية الواجهة
++                  Navigator.push(
++                    context,
++                    MaterialPageRoute(
++                      builder: (context) => const AdminDashboardScreen(),
++                    ),
++                  );
++                },
++                icon: const Icon(
++                  Icons.admin_panel_settings,
++                  color: Colors.blueGrey,
+                 ),
+-              ],
+-            ),
++                label: const Text(
++                  "Admin Dashboard (Dev Only)",
++                  style: TextStyle(color: Colors.blueGrey),
++                ),
++              ),
++
++            ],
+           ),
+         ),
+       ),
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/driver_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/driver_screen.dart b/smart_school/lib/screens/driver_screen.dart
+--- a/smart_school/lib/screens/driver_screen.dart
++++ b/smart_school/lib/screens/driver_screen.dart	(date 1768073071315)
+@@ -1,14 +1,18 @@
+-// lib/screens/driver_screen.dart
++// lib/driver_screen.dart
+ 
++import 'dart:async';
++import 'dart:developer';
+ import 'dart:io';
+ import 'package:flutter/foundation.dart';
+ import 'package:flutter/material.dart';
+ import 'package:image_picker/image_picker.dart';
++import 'package:cloud_firestore/cloud_firestore.dart';
++import 'package:geolocator/geolocator.dart';
++import 'package:firebase_auth/firebase_auth.dart';
++import 'package:smart_school/services/api_service.dart';
+ import 'package:smart_school/services/auth_service.dart';
+ import 'package:smart_school/screens/login_screen.dart';
+-import 'package:smart_school/controllers/driver_controller.dart';
+ 
+-/// Driver Dashboard Screen: Unified design with dark navy theme
+ class DriverScreen extends StatefulWidget {
+   const DriverScreen({super.key});
+ 
+@@ -17,307 +21,619 @@
+ }
+ 
+ class _DriverScreenState extends State<DriverScreen> {
+-  late DriverController _controller;
++  final ImagePicker _picker = ImagePicker();
++  XFile? _selectedImage;
++  bool _isLoading = false;
++  bool _isInitializing = true;
++
++  List<Map<String, dynamic>> _students = [];
++
++  String driverName = "Loading...";
++  String? currentBusId;
++  String? currentPlateNumber;
++  String? currentRouteName;
++  String? message;
++  bool _isTracking = false;
++  Timer? _trackingTimer;
++
++  // نوع الرحلة (صباحي افتراضياً)
++  String _tripType = 'pickup';
+ 
+   @override
+   void initState() {
+     super.initState();
+-    _controller = DriverController();
+-    _controller.initializeDriverAndBus();
++    _initializeDriverAndBus();
+   }
+ 
+-  @override
+-  void dispose() {
+-    _controller.dispose();
+-    super.dispose();
++  Future<void> _initializeDriverAndBus() async {
++    User? user = FirebaseAuth.instance.currentUser;
++    if (user == null) return;
++    try {
++      var driverDoc = await FirebaseFirestore.instance
++          .collection('drivers')
++          .doc(user.uid)
++          .get();
++      if (driverDoc.exists) {
++        setState(
++          () => driverName = driverDoc.data()?['name'] ?? "Unknown Driver",
++        );
++      }
++      var busQuery = await FirebaseFirestore.instance
++          .collection('bus_routes')
++          .where('driver_id', isEqualTo: user.uid)
++          .limit(1)
++          .get();
++      if (busQuery.docs.isNotEmpty) {
++        var busData = busQuery.docs.first.data();
++        setState(() {
++          currentBusId = busQuery.docs.first.id;
++          currentPlateNumber = busData['plate_number'];
++          currentRouteName = busData['route_name'];
++          _isInitializing = false;
++        });
++      } else {
++        setState(() {
++          driverName = "$driverName (No Bus)";
++          _isInitializing = false;
++        });
++      }
++    } catch (e) {
++      setState(() => _isInitializing = false);
++    }
+   }
+ 
+-  void _showMessage(String message, {bool isError = false}) {
+-    if (!mounted) return;
++  // --- دوال الإشعارات ---
++  Future<void> _sendNotification(
++    String parentUid,
++    String title,
++    String body,
++    String type,
++  ) async {
++    if (parentUid.isEmpty || parentUid == 'Unknown') return;
++    try {
++      await FirebaseFirestore.instance.collection('notifications').add({
++        'parent_uid': parentUid,
++        'title': title,
++        'body': body,
++        'type': type,
++        'is_read': false,
++        'created_at': FieldValue.serverTimestamp(),
++      });
++      log("🔔 Notification sent to $parentUid");
++    } catch (e) {
++      log("Error sending notification: $e");
++    }
++  }
++
++  // --- دوال التتبع ---
++  void _toggleTrip() async {
++    if (currentBusId == null) {
++      ScaffoldMessenger.of(
++        context,
++      ).showSnackBar(const SnackBar(content: Text("❌ No bus assigned.")));
++      return;
++    }
++    if (_isTracking) {
++      _stopTracking();
++    } else {
++      await _startTracking();
++    }
++  }
++
++  Future<void> _startTracking() async {
++    LocationPermission permission = await Geolocator.checkPermission();
++    if (permission == LocationPermission.denied) {
++      permission = await Geolocator.requestPermission();
++      if (permission == LocationPermission.denied) return;
++    }
++
++    setState(() => _isTracking = true);
++
++    String typeText = _tripType == 'pickup'
++        ? "☀️ Morning Trip (To School)"
++        : "🌙 Afternoon Trip (To Home)";
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(
+-        content: Text(message),
+-        backgroundColor: isError ? Colors.redAccent : Theme.of(context).colorScheme.primary,
++        content: Text("🚀 Started: $typeText"),
++        backgroundColor: Colors.green,
++      ),
++    );
++
++    await FirebaseFirestore.instance
++        .collection('bus_routes')
++        .doc(currentBusId)
++        .update({
++          'is_active': true,
++          'current_trip_type': _tripType,
++          'trip_start_time': FieldValue.serverTimestamp(),
++        });
++
++    _trackingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
++      Position position = await Geolocator.getCurrentPosition();
++      await FirebaseFirestore.instance
++          .collection('bus_routes')
++          .doc(currentBusId)
++          .update({
++            'current_location': GeoPoint(position.latitude, position.longitude),
++            'last_updated': FieldValue.serverTimestamp(),
++          });
++    });
++  }
++
++  void _stopTracking() async {
++    _trackingTimer?.cancel();
++    setState(() => _isTracking = false);
++    if (currentBusId != null) {
++      await FirebaseFirestore.instance
++          .collection('bus_routes')
++          .doc(currentBusId)
++          .update({'is_active': false});
++    }
++    ScaffoldMessenger.of(context).showSnackBar(
++      const SnackBar(
++        content: Text("🛑 Trip Ended."),
++        backgroundColor: Colors.red,
+       ),
+     );
+   }
++
++  // --- دوال الغياب ---
++  void _showAbsenteesDialog() async {
++    String today = DateTime.now().toString().split(' ')[0];
++    var snapshot = await FirebaseFirestore.instance
++        .collection('leaves')
++        .where('date', isEqualTo: today)
++        .get();
++
++    if (!mounted) return;
++
++    showDialog(
++      context: context,
++      builder: (context) => AlertDialog(
++        title: const Text("🚫 Absent Students Today"),
++        content: SizedBox(
++          width: double.maxFinite,
++          child: snapshot.docs.isEmpty
++              ? const Text("No absences recorded for today. ✅")
++              : ListView.builder(
++                  shrinkWrap: true,
++                  itemCount: snapshot.docs.length,
++                  itemBuilder: (context, index) {
++                    var data = snapshot.docs[index].data();
++                    return ListTile(
++                      leading: const Icon(Icons.person_off, color: Colors.red),
++                      title: Text(data['student_name'] ?? 'Unknown'),
++                      subtitle: Text("Reason: ${data['reason']}"),
++                    );
++                  },
++                ),
++        ),
++        actions: [
++          TextButton(
++            onPressed: () => Navigator.pop(context),
++            child: const Text("Close"),
++          ),
++        ],
++      ),
++    );
++  }
++
++  // --- معالجة الصور والحفظ ---
++  Future<void> _processImage(ImageSource source) async {
++    if (currentBusId == null) return;
++    final XFile? photo = await _picker.pickImage(source: source);
++    if (photo == null) return;
++
++    setState(() {
++      _selectedImage = photo;
++      _isLoading = true;
++      message = null;
++      _students = [];
++    });
++
++    try {
++      final result = await ApiService.scanAttendance(_selectedImage!);
++      if (result['success'] == true) {
++        final basicStudents = result['students'];
++        List<Map<String, dynamic>> enrichedStudents = [];
++        if (basicStudents.isNotEmpty) {
++          for (var student in basicStudents) {
++            Map<String, dynamic> fullData = await _saveAndEnrichStudent(
++              student,
++            );
++            enrichedStudents.add(fullData);
++          }
++          setState(() {
++            _students = enrichedStudents;
++            _isLoading = false;
++          });
++          ScaffoldMessenger.of(context).showSnackBar(
++            const SnackBar(
++              content: Text("✅ Students Boarded."),
++              backgroundColor: Colors.green,
++            ),
++          );
++        } else {
++          setState(() {
++            _isLoading = false;
++            message = "No students recognized.";
++          });
++        }
++      } else {
++        setState(() {
++          _isLoading = false;
++          message = result['error'];
++        });
++      }
++    } catch (e) {
++      setState(() {
++        _isLoading = false;
++        message = "Error: $e";
++      });
++    }
++  }
++
++  Future<Map<String, dynamic>> _saveAndEnrichStudent(
++    Map<String, dynamic> apiStudent,
++  ) async {
++    String studentId = apiStudent['id'].toString();
++    String parentPhone = "Unknown";
++    String parentUid = ""; // 👈 متغير جديد
++    String grade = "N/A";
++
++    try {
++      final studentDoc = await FirebaseFirestore.instance
++          .collection('students')
++          .doc(studentId)
++          .get();
++      if (studentDoc.exists) {
++        final data = studentDoc.data()!;
++        parentPhone = data['parent_phone'] ?? "No Phone";
++        parentUid = data['parent_uid'] ?? ""; // 👈 جلب معرف الأب للإشعارات
++        grade = data['grade'] ?? "N/A";
++      }
++
++      LocationPermission permission = await Geolocator.checkPermission();
++      if (permission == LocationPermission.denied)
++        permission = await Geolocator.requestPermission();
++      Position? position;
++      if (permission == LocationPermission.whileInUse ||
++          permission == LocationPermission.always) {
++        position = await Geolocator.getCurrentPosition();
++      }
++
++      final fullData = {
++        'student_id': studentId,
++        'name': apiStudent['name'],
++        'status': 'Boarded',
++        'trip_type': _tripType,
++        'grade': grade,
++        'parent_phone': parentPhone,
++        'parent_uid': parentUid, // 👈 نحفظه محلياً لاستخدامه عند التنزيل
++        'bus_id': currentBusId,
++        'bus_plate': currentPlateNumber ?? "Unknown",
++        'route_name': currentRouteName ?? "Unknown",
++        'timestamp': FieldValue.serverTimestamp(),
++        'date': DateTime.now().toString().split(' ')[0],
++        'drop_off_time': null,
++        'location': position != null
++            ? GeoPoint(position.latitude, position.longitude)
++            : null,
++      };
++
++      DocumentReference docRef = await FirebaseFirestore.instance
++          .collection('attendance')
++          .add(fullData);
++      fullData['doc_id'] = docRef.id;
++
++      // 🔔 إرسال إشعار الركوب
++      String msg = _tripType == 'pickup'
++          ? "✅ ${apiStudent['name']} has boarded the bus to School."
++          : "✅ ${apiStudent['name']} is on the bus returning Home.";
++      await _sendNotification(parentUid, "Bus Status Update 🚌", msg, 'pickup');
++
++      return fullData;
++    } catch (e) {
++      log("Error saving: $e");
++      return apiStudent;
++    }
++  }
++
++  Future<void> _markAsDroppedOff(String docId, int index) async {
++    try {
++      Position position = await Geolocator.getCurrentPosition();
++      await FirebaseFirestore.instance
++          .collection('attendance')
++          .doc(docId)
++          .update({
++            'status': 'DroppedOff',
++            'drop_off_time': FieldValue.serverTimestamp(),
++            'drop_off_location': GeoPoint(
++              position.latitude,
++              position.longitude,
++            ),
++          });
++
++      // 🔔 إرسال إشعار النزول
++      // نجلب بيانات الطالب من القائمة المحلية لإرسال الإشعار
++      var studentData = _students[index];
++      String parentUid = studentData['parent_uid'] ?? "";
++      String name = studentData['name'] ?? "Student";
++
++      await _sendNotification(
++        parentUid,
++        "Arrived Safely 🏠",
++        "$name has been dropped off safely.",
++        'dropoff',
++      );
++
++      setState(() {
++        _students[index]['status'] = 'DroppedOff';
++      });
++      ScaffoldMessenger.of(
++        context,
++      ).showSnackBar(const SnackBar(content: Text("Dropped Off & Notified ✅")));
++    } catch (e) {
++      log("Error dropping off: $e");
++    }
++  }
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final colorScheme = Theme.of(context).colorScheme;
+-
+-    return ListenableBuilder(
+-      listenable: _controller,
+-      builder: (context, _) {
+-        if (_controller.isInitializing) {
+-          return const Scaffold(
+-            body: Center(child: CircularProgressIndicator()),
+-          );
+-        }
++    if (_isInitializing)
++      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+ 
+-        return Scaffold(
+-          appBar: _buildAppBar(colorScheme),
+-          body: Column(
+-            children: [
+-              _buildTripStatus(colorScheme),
+-              _buildImagePreview(colorScheme),
+-              _buildActionButtons(colorScheme),
+-              _buildListHeader(colorScheme),
+-              _buildStudentList(colorScheme),
+-            ],
+-          ),
+-        );
+-      },
+-    );
+-  }
+-
+-  AppBar _buildAppBar(ColorScheme colorScheme) {
+-    return AppBar(
+-      title: Column(
+-        crossAxisAlignment: CrossAxisAlignment.start,
+-        children: [
+-          const Text("Driver Hub 🚌", style: TextStyle(fontWeight: FontWeight.bold)),
+-          Text(
+-            _controller.currentRouteName ?? "Offline",
+-            style: TextStyle(fontSize: 12, color: colorScheme.secondary),
+-          ),
+-        ],
+-      ),
+-      actions: [
+-        IconButton(
+-          icon: const Icon(Icons.person_search_outlined),
+-          onPressed: _showAbsentees,
+-          tooltip: "Absentees",
+-        ),
+-        IconButton(
+-          icon: const Icon(Icons.logout),
+-          onPressed: () async {
+-            await AuthService().signOut();
+-            if (mounted) {
+-              Navigator.pushReplacement(
+-                context,
+-                MaterialPageRoute(builder: (context) => const LoginScreen()),
+-              );
+-            }
+-          },
+-        ),
+-      ],
+-    );
+-  }
+-
+-  Widget _buildTripStatus(ColorScheme colorScheme) {
+-    return Container(
+-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+-      decoration: BoxDecoration(
+-        color: colorScheme.primaryContainer,
+-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
++    return Scaffold(
++      appBar: AppBar(
++        title: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            const Text("Driver Dashboard 🚌", style: TextStyle(fontSize: 16)),
++            Text(
++              currentRouteName ?? 'No Route',
++              style: const TextStyle(fontSize: 12),
++            ),
++          ],
++        ),
++        backgroundColor: _isTracking ? Colors.red : Colors.teal,
++        foregroundColor: Colors.white,
++        actions: [
++          IconButton(
++            icon: const Icon(Icons.person_off_outlined),
++            tooltip: "Check Absentees",
++            onPressed: _showAbsenteesDialog,
++          ),
++          if (currentBusId != null)
++            TextButton.icon(
++              onPressed: _toggleTrip,
++              icon: Icon(
++                _isTracking ? Icons.stop_circle : Icons.play_circle_fill,
++                color: Colors.white,
++              ),
++              label: Text(
++                _isTracking ? "STOP" : "START",
++                style: const TextStyle(color: Colors.white),
++              ),
++            ),
++          // 👇 زر الخروج تمت إعادته
++          IconButton(
++            icon: const Icon(Icons.logout),
++            onPressed: () async {
++              await AuthService().signOut();
++              if (context.mounted)
++                Navigator.pushReplacement(
++                  context,
++                  MaterialPageRoute(builder: (context) => const LoginScreen()),
++                );
++            },
++          ),
++        ],
+       ),
+-      child: Row(
+-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
++      body: Column(
+         children: [
+-          Row(
+-            children: [
+-              Icon(
+-                _controller.isTracking ? Icons.online_prediction : Icons.offline_bolt,
+-                color: _controller.isTracking ? Colors.greenAccent : colorScheme.secondary,
+-              ),
+-              const SizedBox(width: 10),
+-              DropdownButton<String>(
+-                value: _controller.tripType,
+-                dropdownColor: colorScheme.surface,
+-                underline: const SizedBox(),
+-                items: const [
+-                  DropdownMenuItem(value: 'pickup', child: Text("To School 🏫")),
+-                  DropdownMenuItem(value: 'dropoff', child: Text("To Home 🏠")),
+-                ],
+-                onChanged: (val) {
+-                  if (val != null) _controller.tripType = val;
+-                },
+-              ),
+-            ],
+-          ),
+-          ElevatedButton.icon(
+-            onPressed: () => _controller.toggleTrip(_showMessage),
+-            icon: Icon(_controller.isTracking ? Icons.stop : Icons.play_arrow),
+-            label: Text(_controller.isTracking ? "STOP TRIP" : "START TRIP"),
+-            style: ElevatedButton.styleFrom(
+-              backgroundColor: _controller.isTracking ? Colors.redAccent : colorScheme.primary,
+-              foregroundColor: colorScheme.onPrimary,
++          if (!_isTracking)
++            Container(
++              color: Colors.grey[200],
++              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
++              child: Row(
++                mainAxisAlignment: MainAxisAlignment.center,
++                children: [
++                  const Text(
++                    "Trip Type: ",
++                    style: TextStyle(fontWeight: FontWeight.bold),
++                  ),
++                  const SizedBox(width: 10),
++                  DropdownButton<String>(
++                    value: _tripType,
++                    items: const [
++                      DropdownMenuItem(
++                        value: 'pickup',
++                        child: Text("To School"),
++                      ),
++                      DropdownMenuItem(
++                        value: 'dropoff',
++                        child: Text("To Home"),
++                      ),
++                    ],
++                    onChanged: (val) {
++                      setState(() {
++                        _tripType = val!;
++                      });
++                    },
++                  ),
++                ],
++              ),
+             ),
+-          ),
+-        ],
+-      ),
+-    );
+-  }
++          if (_isTracking)
++            Container(
++              width: double.infinity,
++              color: Colors.redAccent,
++              padding: const EdgeInsets.all(8),
++              child: Text(
++                "📡 LIVE TRACKING: ${_tripType == 'pickup' ? 'To School' : 'To Home'}",
++                textAlign: TextAlign.center,
++                style: const TextStyle(
++                  color: Colors.white,
++                  fontWeight: FontWeight.bold,
++                ),
++              ),
++            ),
+ 
+-  Widget _buildImagePreview(ColorScheme colorScheme) {
+-    return Expanded(
+-      flex: 2,
+-      child: Container(
+-        margin: const EdgeInsets.all(16),
+-        decoration: BoxDecoration(
+-          color: colorScheme.primaryContainer.withOpacity(0.5),
+-          borderRadius: BorderRadius.circular(20),
+-          border: Border.all(color: colorScheme.primary.withOpacity(0.2)),
+-        ),
+-        child: _controller.selectedImage != null
+-            ? ClipRRect(
+-                borderRadius: BorderRadius.circular(20),
+-                child: kIsWeb
+-                    ? Image.network(_controller.selectedImage!.path, fit: BoxFit.cover, width: double.infinity)
+-                    : Image.file(File(_controller.selectedImage!.path), fit: BoxFit.cover, width: double.infinity),
+-              )
+-            : Center(
+-                child: Icon(Icons.camera_enhance_outlined, size: 50, color: colorScheme.secondary),
+-              ),
+-      ),
+-    );
+-  }
++          Expanded(
++            flex: 2,
++            child: Container(
++              width: double.infinity,
++              margin: const EdgeInsets.all(16),
++              decoration: BoxDecoration(
++                color: Colors.grey[200],
++                borderRadius: BorderRadius.circular(15),
++              ),
++              child: _selectedImage != null
++                  ? ClipRRect(
++                      borderRadius: BorderRadius.circular(15),
++                      child: kIsWeb
++                          ? Image.network(
++                              _selectedImage!.path,
++                              fit: BoxFit.cover,
++                            )
++                          : Image.file(
++                              File(_selectedImage!.path),
++                              fit: BoxFit.cover,
++                            ),
++                    )
++                  : const Center(
++                      child: Icon(
++                        Icons.camera_enhance,
++                        size: 60,
++                        color: Colors.grey,
++                      ),
++                    ),
++            ),
++          ),
+ 
+-  Widget _buildActionButtons(ColorScheme colorScheme) {
+-    bool disabled = _controller.isLoading;
+-    return Padding(
+-      padding: const EdgeInsets.symmetric(horizontal: 20),
+-      child: Row(
+-        children: [
+-          Expanded(
+-            child: ElevatedButton.icon(
+-              onPressed: disabled ? null : () => _controller.processImage(ImageSource.camera, _showMessage),
+-              icon: const Icon(Icons.face_unlock_outlined),
+-              label: const Text("Scan Face"),
+-              style: ElevatedButton.styleFrom(
+-                backgroundColor: colorScheme.primary,
+-                foregroundColor: colorScheme.onPrimary,
+-                padding: const EdgeInsets.symmetric(vertical: 15),
+-              ),
+-            ),
+-          ),
+-          const SizedBox(width: 10),
+-          OutlinedButton(
+-            onPressed: disabled ? null : () => _controller.processImage(ImageSource.gallery, _showMessage),
+-            style: OutlinedButton.styleFrom(
+-              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+-              side: BorderSide(color: colorScheme.secondary),
+-            ),
+-            child: Icon(Icons.photo_library_outlined, color: colorScheme.secondary),
+-          ),
+-        ],
+-      ),
+-    );
+-  }
++          Padding(
++            padding: const EdgeInsets.symmetric(horizontal: 20),
++            child: Row(
++              children: [
++                Expanded(
++                  child: ElevatedButton.icon(
++                    onPressed: (_isLoading || currentBusId == null)
++                        ? null
++                        : () => _processImage(ImageSource.camera),
++                    icon: const Icon(Icons.camera_alt),
++                    label: const Text("Scan Face"),
++                  ),
++                ),
++                const SizedBox(width: 10),
++                Expanded(
++                  child: OutlinedButton.icon(
++                    onPressed: (_isLoading || currentBusId == null)
++                        ? null
++                        : () => _processImage(ImageSource.gallery),
++                    icon: const Icon(Icons.photo),
++                    label: const Text("Gallery"),
++                  ),
++                ),
++              ],
++            ),
++          ),
+ 
+-  Widget _buildListHeader(ColorScheme colorScheme) {
+-    return Padding(
+-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+-      child: Row(
+-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+-        children: [
+-          const Text("On Board Students", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+-          if (_controller.students.isNotEmpty)
+-            Row(
+-              children: [
+-                TextButton(
+-                  onPressed: () => _controller.dropOffAll(_showMessage),
+-                  style: TextButton.styleFrom(foregroundColor: Colors.orangeAccent),
+-                  child: const Text("DROP OFF ALL", style: TextStyle(fontWeight: FontWeight.bold)),
+-                ),
+-                TextButton(
+-                  onPressed: _controller.clearStudentsList,
+-                  style: TextButton.styleFrom(foregroundColor: colorScheme.secondary),
+-                  child: const Text("Clear"),
+-                ),
+-              ],
+-            ),
+-        ],
+-      ),
+-    );
+-  }
+-
+-  Widget _buildStudentList(ColorScheme colorScheme) {
+-    if (_controller.isLoading) {
+-      return const Expanded(flex: 3, child: Center(child: CircularProgressIndicator()));
+-    }
+-    if (_controller.students.isEmpty) {
+-      return Expanded(
+-        flex: 3,
+-        child: Center(
+-          child: Opacity(
+-            opacity: 0.5,
+-            child: Column(
+-              mainAxisAlignment: MainAxisAlignment.center,
+-              children: [
+-                Icon(Icons.group_off_outlined, size: 60, color: colorScheme.secondary),
+-                const SizedBox(height: 10),
+-                const Text("No students on board"),
+-              ],
+-            ),
+-          ),
+-        ),
+-      );
+-    }
+-    return Expanded(
+-      flex: 3,
+-      child: ListView.builder(
+-        itemCount: _controller.students.length,
+-        padding: const EdgeInsets.symmetric(horizontal: 16),
+-        itemBuilder: (context, index) {
+-          final s = _controller.students[index];
+-          return Card(
+-            color: colorScheme.primaryContainer,
+-            margin: const EdgeInsets.only(bottom: 12),
+-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+-            child: ListTile(
+-              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+-              leading: CircleAvatar(
+-                backgroundColor: colorScheme.primary,
+-                child: Text(s['name'][0], style: const TextStyle(color: Colors.white)),
+-              ),
+-              title: Text(s['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+-              subtitle: Text("Status: ${s['status']}", style: TextStyle(color: colorScheme.secondary, fontSize: 12)),
+-              trailing: ElevatedButton(
+-                onPressed: () => _controller.markAsDroppedOff(s['doc_id'], index, _showMessage),
+-                style: ElevatedButton.styleFrom(
+-                  backgroundColor: Colors.orangeAccent,
+-                  foregroundColor: Colors.black,
+-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+-                ),
+-                child: const Text("DROP OFF", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+-              ),
+-            ),
+-          );
+-        },
+-      ),
+-    );
+-  }
+-
+-  void _showAbsentees() async {
+-    final absentees = await _controller.getAbsentees();
+-    if (!mounted) return;
+-    showDialog(
+-      context: context,
+-      builder: (ctx) => AlertDialog(
+-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+-        title: const Text("Today's Absentees"),
+-        content: SizedBox(
+-          width: double.maxFinite,
+-          child: absentees.isEmpty
+-              ? const Text("No absences recorded for today.")
+-              : ListView(
+-                  shrinkWrap: true,
+-                  children: absentees.map((a) => ListTile(
+-                    leading: const Icon(Icons.person_off, color: Colors.redAccent),
+-                    title: Text(a['student_name'] ?? 'Unknown'),
+-                    subtitle: Text("Reason: ${a['reason']}", style: const TextStyle(fontSize: 12)),
+-                  )).toList(),
+-                ),
+-        ),
+-        actions: [
+-          TextButton(
+-            onPressed: () => Navigator.pop(ctx),
+-            child: const Text("Close"),
++          const Divider(height: 30),
++
++          Expanded(
++            flex: 3,
++            child: _isLoading
++                ? const Center(child: CircularProgressIndicator())
++                : ListView.builder(
++                    itemCount: _students.length,
++                    itemBuilder: (context, index) {
++                      final student = _students[index];
++                      bool isBoarded = student['status'] == 'Boarded';
++                      return Container(
++                        margin: const EdgeInsets.symmetric(
++                          horizontal: 16,
++                          vertical: 8,
++                        ),
++                        padding: const EdgeInsets.all(16),
++                        decoration: BoxDecoration(
++                          color: Colors.white,
++                          borderRadius: BorderRadius.circular(15),
++                          boxShadow: [
++                            BoxShadow(
++                              color: Colors.grey.withOpacity(0.5),
++                              blurRadius: 5,
++                            ),
++                          ],
++                        ),
++                        child: Column(
++                          children: [
++                            Row(
++                              children: [
++                                CircleAvatar(
++                                  radius: 25,
++                                  backgroundColor: Colors.teal.shade100,
++                                  child: Text(
++                                    student['name'][0],
++                                    style: const TextStyle(
++                                      fontSize: 20,
++                                      fontWeight: FontWeight.bold,
++                                    ),
++                                  ),
++                                ),
++                                const SizedBox(width: 15),
++                                Column(
++                                  crossAxisAlignment: CrossAxisAlignment.start,
++                                  children: [
++                                    Text(
++                                      student['name'],
++                                      style: const TextStyle(
++                                        fontSize: 18,
++                                        fontWeight: FontWeight.bold,
++                                      ),
++                                    ),
++                                    Text(
++                                      _tripType == 'pickup'
++                                          ? "To School 🏫"
++                                          : "To Home 🏠",
++                                      style: TextStyle(
++                                        color: Colors.grey[600],
++                                        fontSize: 12,
++                                      ),
++                                    ),
++                                  ],
++                                ),
++                                const Spacer(),
++                                if (isBoarded)
++                                  const Icon(
++                                    Icons.directions_bus,
++                                    color: Colors.green,
++                                  ),
++                              ],
++                            ),
++                            if (isBoarded) ...[
++                              const SizedBox(height: 10),
++                              ElevatedButton(
++                                onPressed: () =>
++                                    _markAsDroppedOff(student['doc_id'], index),
++                                style: ElevatedButton.styleFrom(
++                                  backgroundColor: Colors.redAccent,
++                                  minimumSize: const Size(double.infinity, 40),
++                                ),
++                                child: const Text(
++                                  "DROP OFF",
++                                  style: TextStyle(color: Colors.white),
++                                ),
++                              ),
++                            ],
++                          ],
++                        ),
++                      );
++                    },
++                  ),
+           ),
+         ],
+       ),
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/parent_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/parent_screen.dart b/smart_school/lib/screens/parent_screen.dart
+--- a/smart_school/lib/screens/parent_screen.dart
++++ b/smart_school/lib/screens/parent_screen.dart	(date 1768073071324)
+@@ -1,18 +1,15 @@
+-// lib/screens/parent_screen.dart
++// lib/parent_screen.dart
+ 
++import 'package:firebase_auth/firebase_auth.dart';
+ import 'package:flutter/material.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
+ import 'package:intl/intl.dart';
+-import 'package:smart_school/controllers/parent_controller.dart';
+ import 'package:smart_school/screens/schedule_screen.dart';
+ import 'package:smart_school/screens/assignments_screen.dart';
+ import 'package:smart_school/screens/exam_results_screen.dart';
+ import 'package:smart_school/screens/map_screen.dart';
+ import 'package:smart_school/screens/notifications_screen.dart';
+-import 'package:smart_school/services/auth_service.dart';
+-import 'package:smart_school/screens/login_screen.dart';
+ 
+-/// شاشة الوالدين الرئيسية: تعرض قائمة بالأبناء وحالتهم في الحافلة والمهام الدراسية
+ class ParentScreen extends StatefulWidget {
+   const ParentScreen({super.key});
+ 
+@@ -21,40 +18,25 @@
+ }
+ 
+ class _ParentScreenState extends State<ParentScreen> {
+-  late ParentController _controller;
+-  final AuthService _authService = AuthService();
++  final String? _currentUserUid = FirebaseAuth.instance.currentUser?.uid;
++  DateTime _selectedDate = DateTime.now();
+ 
+-  @override
+-  void initState() {
+-    super.initState();
+-    _controller = ParentController();
+-  }
+-
+-  @override
+-  void dispose() {
+-    _controller.dispose();
+-    super.dispose();
+-  }
+-
+-  /// وظيفة تسجيل الخروج والعودة لشاشة الدخول
+-  void _logout() async {
+-    await _authService.signOut();
+-    if (!mounted) return;
+-    Navigator.pushAndRemoveUntil(
+-      context,
+-      MaterialPageRoute(builder: (context) => const LoginScreen()),
+-      (route) => false,
++  Future<void> _pickDate() async {
++    final DateTime? picked = await showDatePicker(
++      context: context,
++      initialDate: _selectedDate,
++      firstDate: DateTime(2024),
++      lastDate: DateTime.now(),
++      builder: (context, child) => Theme(
++        data: ThemeData.light().copyWith(
++          colorScheme: const ColorScheme.light(primary: Colors.indigo),
++        ),
++        child: child!,
++      ),
+     );
+-  }
+-
+-  void _showMessage(String message, {bool isError = false}) {
+-    if (!mounted) return;
+-    ScaffoldMessenger.of(context).showSnackBar(
+-      SnackBar(
+-        content: Text(message),
+-        backgroundColor: isError ? Colors.redAccent : Theme.of(context).colorScheme.primary,
+-      ),
+-    );
++    if (picked != null && picked != _selectedDate) {
++      setState(() => _selectedDate = picked);
++    }
+   }
+ 
+   void _openMap(BuildContext context, Map<String, dynamic> attendanceData) {
+@@ -76,48 +58,145 @@
+     );
+   }
+ 
++  // دالة طلب الغياب
++  Future<void> _requestAbsence(String studentId, String studentName) async {
++    // 1. اختيار التاريخ
++    DateTime? pickedDate = await showDatePicker(
++      context: context,
++      initialDate: DateTime.now().add(const Duration(days: 1)),
++      // الافتراضي غداً
++      firstDate: DateTime.now(),
++      lastDate: DateTime.now().add(const Duration(days: 30)),
++      helpText: "Select Absence Date 📅",
++    );
++
++    if (pickedDate == null) return;
++
++    String dateStr = pickedDate.toString().split(' ')[0];
++
++    // 2. تأكيد الطلب
++    if (!mounted) return;
++    bool? confirm = await showDialog(
++      context: context,
++      builder: (ctx) => AlertDialog(
++        title: const Text("Confirm Absence"),
++        content: Text("Mark $studentName as absent on $dateStr?"),
++        actions: [
++          TextButton(
++            onPressed: () => Navigator.pop(ctx, false),
++            child: const Text("Cancel"),
++          ),
++          ElevatedButton(
++            onPressed: () => Navigator.pop(ctx, true),
++            style: ElevatedButton.styleFrom(
++              backgroundColor: Colors.red,
++              foregroundColor: Colors.white,
++            ),
++            child: const Text("Confirm"),
++          ),
++        ],
++      ),
++    );
++
++    if (confirm == true) {
++      try {
++        await FirebaseFirestore.instance.collection('leaves').add({
++          'student_id': studentId,
++          'student_name': studentName,
++          'parent_uid': _currentUserUid,
++          'date': dateStr,
++          'reason': 'Parent Request',
++          'created_at': FieldValue.serverTimestamp(),
++        });
++
++        ScaffoldMessenger.of(context).showSnackBar(
++          SnackBar(
++            content: Text("✅ Absence recorded for $dateStr"),
++            backgroundColor: Colors.orange,
++          ),
++        );
++      } catch (e) {
++        ScaffoldMessenger.of(
++          context,
++        ).showSnackBar(SnackBar(content: Text("Error: $e")));
++      }
++    }
++  }
++
++  // ودجت صغيرة لعرض سطر الرحلة (صباحي أو مسائي)
+   Widget _buildTripRow(
+     String title,
+     IconData icon,
+     Map<String, dynamic>? record,
+-    VoidCallback? onTap,
+-    ColorScheme colorScheme,
+   ) {
+-    var statusDetails = _controller.getTripStatusDetails(record);
+-    Color color = statusDetails['color'];
+-    String statusText = statusDetails['statusText'];
+-    bool hasTap = statusDetails['hasTap'];
++    String status = record?['status'] ?? 'Waiting';
++    bool hasRecord = record != null;
++
++    Color color;
++    String statusText;
++    VoidCallback? onTap;
++
++    if (!hasRecord) {
++      color = Colors.grey;
++      statusText = "No record yet";
++      onTap = null;
++    } else if (status == 'Boarded') {
++      color = Colors.green;
++      statusText = "On Bus (Live) 📍";
++      onTap = () => _openMap(context, record);
++    } else if (status == 'DroppedOff') {
++      color = Colors.indigo;
++      String time = "";
++      if (record['drop_off_time'] != null) {
++        time = DateFormat(
++          'h:mm a',
++        ).format((record['drop_off_time'] as Timestamp).toDate());
++      }
++      statusText = "Arrived ($time) ✅";
++      onTap = () => _openMap(context, record); // لرؤية التفاصيل
++    } else {
++      color = Colors.orange;
++      statusText = "Waiting...";
++      onTap = null;
++    }
+ 
+     return InkWell(
+-      onTap: hasTap ? onTap : null,
++      onTap: onTap,
+       child: Container(
+         margin: const EdgeInsets.only(top: 10),
+         padding: const EdgeInsets.all(12),
+         decoration: BoxDecoration(
+-          color: colorScheme.primaryContainer.withOpacity(0.3),
+-          borderRadius: BorderRadius.circular(12),
+-          border: Border.all(color: colorScheme.primary.withOpacity(0.1)),
++          color: Colors.grey[50],
++          borderRadius: BorderRadius.circular(10),
++          border: Border.all(color: Colors.grey.shade200),
+         ),
+         child: Row(
+           children: [
+-            Icon(icon, color: record != null ? color : colorScheme.secondary, size: 24),
++            Icon(icon, color: hasRecord ? color : Colors.grey, size: 24),
+             const SizedBox(width: 10),
+             Column(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Text(
+                   title,
+-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
++                  style: const TextStyle(
++                    fontWeight: FontWeight.bold,
++                    fontSize: 14,
++                  ),
+                 ),
+                 Text(
+                   statusText,
+-                  style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500),
++                  style: TextStyle(
++                    color: color,
++                    fontSize: 12,
++                    fontWeight: FontWeight.w500,
++                  ),
+                 ),
+               ],
+             ),
+             const Spacer(),
+-            if (record != null)
+-              Icon(Icons.arrow_forward_ios, size: 14, color: colorScheme.secondary),
++            if (hasRecord)
++              Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
+           ],
+         ),
+       ),
+@@ -126,236 +205,350 @@
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final colorScheme = Theme.of(context).colorScheme;
+-
+-    return ListenableBuilder(
+-      listenable: _controller,
+-      builder: (context, _) {
+-        String formattedDate = _controller.getFormattedDate();
+-        bool isToday = _controller.isToday();
++    String formattedDate = _selectedDate.toString().split(' ')[0];
++    bool isToday = formattedDate == DateTime.now().toString().split(' ')[0];
+ 
+-        return Scaffold(
+-          appBar: AppBar(
+-            title: Column(
+-              crossAxisAlignment: CrossAxisAlignment.start,
+-              children: [
+-                const Text("Children Status 🚌", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+-                Text(
+-                  isToday
+-                      ? "Today, ${DateFormat('MMM d').format(_controller.selectedDate)}"
+-                      : DateFormat('EEE, MMM d, y').format(_controller.selectedDate),
+-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w300, color: colorScheme.secondary),
+-                ),
+-              ],
+-            ),
+-            actions: [
+-              StreamBuilder<int>(
+-                stream: _controller.getUnreadNotificationsCount(),
+-                builder: (context, snapshot) {
+-                  int count = snapshot.data ?? 0;
+-                  return Stack(
+-                    alignment: Alignment.center,
+-                    children: [
+-                      IconButton(
+-                        icon: const Icon(Icons.notifications_outlined),
+-                        onPressed: () => Navigator.push(
+-                          context,
+-                          MaterialPageRoute(builder: (context) => const NotificationsScreen()),
++    return Scaffold(
++      appBar: AppBar(
++        title: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          children: [
++            const Text("Children Status 🚌", style: TextStyle(fontSize: 18)),
++            Text(
++              isToday
++                  ? "Today, ${DateFormat('MMM d').format(_selectedDate)}"
++                  : DateFormat('EEE, MMM d, y').format(_selectedDate),
++              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
++            ),
++          ],
++        ),
++        backgroundColor: Colors.indigo,
++        foregroundColor: Colors.white,
++        actions: [
++          StreamBuilder<QuerySnapshot>(
++            stream: FirebaseFirestore.instance
++                .collection('notifications')
++                .where('parent_uid', isEqualTo: _currentUserUid)
++                .where('is_read', isEqualTo: false)
++                .snapshots(),
++            builder: (context, snapshot) {
++              int count = 0;
++              if (snapshot.hasData) count = snapshot.data!.docs.length;
++
++              return Stack(
++                alignment: Alignment.center,
++                children: [
++                  IconButton(
++                    icon: const Icon(Icons.notifications),
++                    onPressed: () {
++                      // الانتقال لشاشة الإشعارات
++                      Navigator.push(
++                        context,
++                        MaterialPageRoute(
++                          builder: (context) => const NotificationsScreen(),
+                         ),
+-                      ),
+-                      if (count > 0)
+-                        Positioned(
+-                          right: 8,
+-                          top: 8,
+-                          child: Container(
+-                            padding: const EdgeInsets.all(2),
+-                            decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10)),
+-                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+-                            child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
++                      );
++                    },
++                  ),
++                  if (count > 0)
++                    Positioned(
++                      right: 8,
++                      top: 8,
++                      child: Container(
++                        padding: const EdgeInsets.all(2),
++                        decoration: BoxDecoration(
++                          color: Colors.red,
++                          borderRadius: BorderRadius.circular(10),
++                        ),
++                        constraints: const BoxConstraints(
++                          minWidth: 16,
++                          minHeight: 16,
++                        ),
++                        child: Text(
++                          '$count',
++                          style: const TextStyle(
++                            color: Colors.white,
++                            fontSize: 10,
++                            fontWeight: FontWeight.bold,
+                           ),
++                          textAlign: TextAlign.center,
+                         ),
+-                    ],
+-                  );
+-                },
+-              ),
+-              IconButton(
+-                icon: const Icon(Icons.calendar_month_outlined),
+-                onPressed: () => _controller.pickDate(context),
+-              ),
+-              IconButton(
+-                icon: const Icon(Icons.logout_rounded),
+-                tooltip: "Logout",
+-                onPressed: () {
+-                  // إظهار حوار تأكيد قبل تسجيل الخروج
+-                  showDialog(
+-                    context: context,
+-                    builder: (context) => AlertDialog(
+-                      title: const Text("Logout"),
+-                      content: const Text("Are you sure you want to sign out?"),
+-                      actions: [
+-                        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+-                        TextButton(onPressed: _logout, child: const Text("Logout", style: TextStyle(color: Colors.red))),
+-                      ],
+-                    ),
+-                  );
+-                },
+-              ),
+-            ],
+-          ),
+-          body: StreamBuilder<QuerySnapshot>(
+-            stream: _controller.getStudentsStream(),
+-            builder: (context, studentSnapshot) {
+-              if (studentSnapshot.connectionState == ConnectionState.waiting) {
+-                return const Center(child: CircularProgressIndicator());
+-              }
+-              if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty) {
+-                return Center(
+-                  child: Text("No children linked.", style: TextStyle(color: colorScheme.secondary)),
+-                );
+-              }
++                      ),
++                    ),
++                ],
++              );
++            },
++          ),
++          IconButton(
++            icon: const Icon(Icons.calendar_month),
++            onPressed: _pickDate,
++          ),
++        ],
++      ),
++      body: StreamBuilder<QuerySnapshot>(
++        stream: FirebaseFirestore.instance
++            .collection('students')
++            .where('parent_uid', isEqualTo: _currentUserUid)
++            .snapshots(),
++        builder: (context, studentSnapshot) {
++          if (studentSnapshot.connectionState == ConnectionState.waiting)
++            return const Center(child: CircularProgressIndicator());
++          if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty)
++            return const Center(child: Text("No children linked."));
+ 
+-              var studentsDocs = studentSnapshot.data!.docs;
++          var studentsDocs = studentSnapshot.data!.docs;
+ 
+-              return ListView.builder(
+-                itemCount: studentsDocs.length,
+-                padding: const EdgeInsets.all(16),
+-                itemBuilder: (context, index) {
+-                  var studentData = studentsDocs[index].data() as Map<String, dynamic>;
+-                  String studentId = studentsDocs[index].id;
+-                  String studentName = studentData['name'] ?? "Unknown";
++          return ListView.builder(
++            itemCount: studentsDocs.length,
++            padding: const EdgeInsets.all(16),
++            itemBuilder: (context, index) {
++              var studentData =
++                  studentsDocs[index].data() as Map<String, dynamic>;
++              String studentId = studentsDocs[index].id;
++              String studentName = studentData['name'] ?? "Unknown";
+ 
+-                  return StreamBuilder<QuerySnapshot>(
+-                    stream: _controller.getAttendanceStream(studentId, formattedDate),
+-                    builder: (context, attendanceSnapshot) {
+-                      Map<String, dynamic>? morningRecord;
+-                      Map<String, dynamic>? afternoonRecord;
++              return StreamBuilder<QuerySnapshot>(
++                stream: FirebaseFirestore.instance
++                    .collection('attendance')
++                    .where('student_id', isEqualTo: studentId)
++                    .where('date', isEqualTo: formattedDate)
++                    .orderBy('timestamp', descending: true) // نجلب الكل مرتبين
++                    .snapshots(), // 👈 أزلنا limit(1)
++                builder: (context, attendanceSnapshot) {
++                  Map<String, dynamic>? morningRecord;
++                  Map<String, dynamic>? afternoonRecord;
+ 
+-                      if (attendanceSnapshot.hasData) {
+-                        _controller.parseAttendanceRecords(
+-                          attendanceSnapshot.data!,
+-                          onMorning: (record) => morningRecord = record,
+-                          onAfternoon: (record) => afternoonRecord = record,
+-                        );
+-                      }
++                  if (attendanceSnapshot.hasData &&
++                      attendanceSnapshot.data!.docs.isNotEmpty) {
++                    var docs = attendanceSnapshot.data!.docs;
++
++                    // تصفية السجلات حسب نوع الرحلة
++                    try {
++                      var morningDoc = docs.firstWhere(
++                        (d) => d['trip_type'] == 'pickup',
++                      );
++                      morningRecord = morningDoc.data() as Map<String, dynamic>;
++                    } catch (e) {
++                      /* No morning trip */
++                    }
++
++                    try {
++                      var afternoonDoc = docs.firstWhere(
++                        (d) => d['trip_type'] == 'dropoff',
++                      );
++                      afternoonRecord =
++                          afternoonDoc.data() as Map<String, dynamic>;
++                    } catch (e) {
++                      /* No afternoon trip */
++                    }
++                  }
+ 
+-                      return Card(
+-                        color: colorScheme.primaryContainer,
+-                        elevation: 0,
+-                        margin: const EdgeInsets.only(bottom: 20),
+-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+-                        child: Padding(
+-                          padding: const EdgeInsets.all(20.0),
+-                          child: Column(
+-                            crossAxisAlignment: CrossAxisAlignment.start,
+-                            children: [
+-                              Row(
+-                                children: [
+-                                  CircleAvatar(
+-                                    radius: 30,
+-                                    backgroundColor: colorScheme.primary,
+-                                    child: Text(studentName[0], style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: colorScheme.onPrimary)),
++                  return Card(
++                    elevation: 3,
++                    margin: const EdgeInsets.only(bottom: 20),
++                    shape: RoundedRectangleBorder(
++                      borderRadius: BorderRadius.circular(15),
++                    ),
++                    child: Padding(
++                      padding: const EdgeInsets.all(16.0),
++                      child: Column(
++                        crossAxisAlignment: CrossAxisAlignment.start,
++                        children: [
++                          // رأس الكرت (اسم الطالب)
++                          Row(
++                            children: [
++                              CircleAvatar(
++                                radius: 25,
++                                backgroundColor: Colors.indigo.shade100,
++                                child: Text(
++                                  studentName[0],
++                                  style: const TextStyle(
++                                    fontSize: 20,
++                                    fontWeight: FontWeight.bold,
+                                   ),
+-                                  const SizedBox(width: 15),
+-                                  Column(
+-                                    crossAxisAlignment: CrossAxisAlignment.start,
+-                                    children: [
+-                                      Text(studentName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+-                                      Text("Grade: ${studentData['grade'] ?? 'N/A'}", style: TextStyle(color: colorScheme.secondary, fontSize: 14)),
+-                                    ],
+-                                  ),
+-                                ],
+-                              ),
+-                              const SizedBox(height: 20),
+-                              Row(
+-                                children: [
+-                                  Expanded(
+-                                    child: ElevatedButton.icon(
+-                                      onPressed: () {
+-                                        String classId = studentData['class_id'] ?? '';
+-                                        String className = studentData['class_name'] ?? 'Class';
+-                                        if (classId.isNotEmpty) {
+-                                          Navigator.push(context, MaterialPageRoute(builder: (context) => ScheduleScreen(classId: classId, className: className)));
+-                                        }
+-                                      },
+-                                      icon: const Icon(Icons.calendar_today, size: 16),
+-                                      label: const Text("SCHEDULE"),
+-                                      style: ElevatedButton.styleFrom(
+-                                        backgroundColor: colorScheme.primary,
+-                                        foregroundColor: colorScheme.onPrimary,
+-                                        elevation: 0,
+-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+-                                      ),
+-                                    ),
++                                ),
++                              ),
++                              const SizedBox(width: 15),
++                              Column(
++                                crossAxisAlignment: CrossAxisAlignment.start,
++                                children: [
++                                  Text(
++                                    studentName,
++                                    style: const TextStyle(
++                                      fontSize: 18,
++                                      fontWeight: FontWeight.bold,
++                                    ),
++                                  ),
++                                  Text(
++                                    "Grade: ${studentData['grade'] ?? 'N/A'}",
++                                    style: TextStyle(
++                                      color: Colors.grey[600],
++                                      fontSize: 12,
++                                    ),
++                                  ),
++                                ],
++                              ),
++                            ],
++                          ),
++                          const SizedBox(height: 10),
++
++                          // زر فتح الجدول الدراسي
++                          const SizedBox(height: 15),
++
++                          // صف يحتوي على الزرين (الجدول + الواجبات)
++                          Row(
++                            children: [
++                              // 1. زر الجدول
++                              Expanded(
++                                child: OutlinedButton.icon(
++                                  onPressed: () {
++                                    String classId =
++                                        studentData['class_id'] ?? '';
++                                    String className =
++                                        studentData['class_name'] ?? 'Class';
++                                    if (classId.isNotEmpty) {
++                                      Navigator.push(
++                                        context,
++                                        MaterialPageRoute(
++                                          builder: (context) => ScheduleScreen(
++                                            classId: classId,
++                                            className: className,
++                                          ),
++                                        ),
++                                      );
++                                    }
++                                  },
++                                  icon: const Icon(
++                                    Icons.calendar_month,
++                                    size: 18,
++                                  ),
++                                  label: const Text(
++                                    "SCHEDULE",
++                                    style: TextStyle(fontSize: 12),
++                                  ),
++                                  style: OutlinedButton.styleFrom(
++                                    foregroundColor: Colors.indigo,
+                                   ),
+-                                  const SizedBox(width: 10),
+-                                  Expanded(
+-                                    child: OutlinedButton.icon(
+-                                      onPressed: () {
+-                                        String classId = studentData['class_id'] ?? '';
+-                                        String className = studentData['class_name'] ?? 'Class';
+-                                        if (classId.isNotEmpty) {
+-                                          Navigator.push(context, MaterialPageRoute(builder: (context) => AssignmentsScreen(classId: classId, className: className)));
+-                                        }
+-                                      },
+-                                      icon: const Icon(Icons.assignment_outlined, size: 16),
+-                                      label: const Text("HOMEWORK"),
+-                                      style: OutlinedButton.styleFrom(
+-                                        foregroundColor: colorScheme.secondary,
+-                                        side: BorderSide(color: colorScheme.secondary),
+-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+-                                      ),
+-                                    ),
+-                                  ),
+-                                ],
+-                              ),
+-                              const SizedBox(height: 10),
+-                              SizedBox(
+-                                width: double.infinity,
+-                                child: TextButton.icon(
+-                                  onPressed: () async {
+-                                    bool success = await _controller.requestAbsence(context, studentId, studentName);
+-                                    if (success) _showMessage("✅ Absence recorded");
+-                                  },
+-                                  icon: const Icon(Icons.sick_outlined, size: 20, color: Colors.redAccent),
+-                                  label: const Text("REPORT ABSENCE / SICK LEAVE", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+-                                  style: TextButton.styleFrom(
+-                                    backgroundColor: Colors.redAccent.withOpacity(0.1),
+-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+-                                  ),
+-                                ),
+-                              ),
+-                              const SizedBox(height: 10),
+-                              SizedBox(
+-                                width: double.infinity,
+-                                child: ElevatedButton.icon(
+-                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ExamResultsScreen(studentId: studentId, studentName: studentName))),
+-                                  icon: const Icon(Icons.school_outlined),
+-                                  label: const Text("VIEW EXAM RESULTS 🎓"),
+-                                  style: ElevatedButton.styleFrom(
+-                                    backgroundColor: colorScheme.secondary,
+-                                    foregroundColor: colorScheme.onSurface,
+-                                    elevation: 0,
+-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+-                                  ),
+-                                ),
+-                              ),
+-                              const Divider(height: 30, color: Colors.white10),
+-                              _buildTripRow("Morning (To School)", Icons.wb_sunny_outlined, morningRecord, morningRecord != null ? () => _openMap(context, morningRecord!) : null, colorScheme),
+-                              _buildTripRow("Afternoon (To Home)", Icons.home_outlined, afternoonRecord, afternoonRecord != null ? () => _openMap(context, afternoonRecord!) : null, colorScheme),
+-                            ],
+-                          ),
+-                        ),
+-                      );
+-                    },
+-                  );
+-                },
+-              );
+-            },
+-          ),
+-        );
+-      },
++                                ),
++                              ),
++
++                              const SizedBox(width: 10),
++
++                              // 2. زر الواجبات (الجديد)
++                              Expanded(
++                                child: OutlinedButton.icon(
++                                  onPressed: () {
++                                    // تأكد من استيراد ملف assignments_screen.dart في الأعلى
++                                    String classId =
++                                        studentData['class_id'] ?? '';
++                                    String className =
++                                        studentData['class_name'] ?? 'Class';
++                                    if (classId.isNotEmpty) {
++                                      Navigator.push(
++                                        context,
++                                        MaterialPageRoute(
++                                          builder: (context) =>
++                                              AssignmentsScreen(
++                                                classId: classId,
++                                                className: className,
++                                              ),
++                                        ),
++                                      );
++                                    }
++                                  },
++                                  icon: const Icon(Icons.assignment, size: 18),
++                                  label: const Text(
++                                    "HOMEWORK",
++                                    style: TextStyle(fontSize: 12),
++                                  ),
++                                  style: OutlinedButton.styleFrom(
++                                    foregroundColor: Colors.deepOrange,
++                                  ),
++                                ),
++                              ),
++                            ],
++                          ),
++                          // ... تحت صف الأزرار السابق (Schedule & Homework) ...
++                          const SizedBox(height: 10),
++
++                          // زر الإبلاغ عن غياب
++                          SizedBox(
++                            width: double.infinity,
++                            child: TextButton.icon(
++                              onPressed: () =>
++                                  _requestAbsence(studentId, studentName),
++                              icon: const Icon(
++                                Icons.sick,
++                                size: 20,
++                                color: Colors.redAccent,
++                              ),
++                              label: const Text(
++                                "REPORT ABSENCE / SICK LEAVE",
++                                style: TextStyle(color: Colors.redAccent),
++                              ),
++                              style: TextButton.styleFrom(
++                                backgroundColor: Colors.red.shade50,
++                                padding: const EdgeInsets.symmetric(
++                                  vertical: 12,
++                                ),
++                              ),
++                            ),
++                          ),
++                          const SizedBox(height: 10),
++
++                          // زر نتائج الامتحانات
++                          SizedBox(
++                            width: double.infinity,
++                            child: ElevatedButton.icon(
++                              onPressed: () {
++                                Navigator.push(
++                                  context,
++                                  MaterialPageRoute(
++                                    builder: (context) => ExamResultsScreen(
++                                      studentId: studentId,
++                                      studentName: studentName,
++                                    ),
++                                  ),
++                                );
++                              },
++                              icon: const Icon(Icons.school),
++                              label: const Text("VIEW EXAM RESULTS 🎓"),
++                              style: ElevatedButton.styleFrom(
++                                backgroundColor: Colors.teal,
++                                foregroundColor: Colors.white,
++                                padding: const EdgeInsets.symmetric(
++                                  vertical: 12,
++                                ),
++                              ),
++                            ),
++                          ),
++
++                          const Divider(height: 25),
++
++                          // 1. الرحلة الصباحية (Pickup)
++                          _buildTripRow(
++                            "Morning Trip (To School)",
++                            Icons.wb_sunny,
++                            morningRecord,
++                          ),
++
++                          // 2. الرحلة المسائية (Dropoff)
++                          _buildTripRow(
++                            "Afternoon Trip (To Home)",
++                            Icons.nights_stay,
++                            afternoonRecord,
++                          ),
++                        ],
++                      ),
++                    ),
++                  );
++                },
++              );
++            },
++          );
++        },
++      ),
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/schedule_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/schedule_screen.dart b/smart_school/lib/screens/schedule_screen.dart
+--- a/smart_school/lib/screens/schedule_screen.dart
++++ b/smart_school/lib/screens/schedule_screen.dart	(date 1768073071324)
+@@ -1,11 +1,9 @@
+-// lib/screens/schedule_screen.dart
++// lib/schedule_screen.dart
+ 
+ import 'package:flutter/material.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
+-import 'package:smart_school/controllers/academic_controller.dart';
+ 
+-/// شاشة الجدول الدراسي: تعرض الحصص اليومية مقسمة حسب أيام الأسبوع
+-class ScheduleScreen extends StatefulWidget {
++class ScheduleScreen extends StatelessWidget {
+   final String classId;
+   final String className;
+ 
+@@ -15,123 +13,101 @@
+     required this.className,
+   });
+ 
+-  @override
+-  State<ScheduleScreen> createState() => _ScheduleScreenState();
+-}
+-
+-class _ScheduleScreenState extends State<ScheduleScreen> {
+-  late AcademicController _controller;
+-
+-  // خريطة ألوان مخصصة لكل يوم من أيام الأسبوع لإضفاء مظهر حيوي
+-  final Map<String, Color> _dayColors = {
+-    'Sunday': Colors.indigoAccent,
+-    'Monday': Colors.tealAccent,
+-    'Tuesday': Colors.orangeAccent,
+-    'Wednesday': Colors.purpleAccent,
+-    'Thursday': Colors.greenAccent,
+-  };
+-
+-  @override
+-  void initState() {
+-    super.initState();
+-    _controller = AcademicController();
+-  }
+-
+   @override
+   Widget build(BuildContext context) {
+-    final colorScheme = Theme.of(context).colorScheme;
++    // ترتيب الأيام لضمان ظهورها بشكل صحيح
++    final List<String> orderedDays = [
++      "Sunday",
++      "Monday",
++      "Tuesday",
++      "Wednesday",
++      "Thursday",
++    ];
+ 
+     return Scaffold(
+-      backgroundColor: colorScheme.surface,
+       appBar: AppBar(
+-        title: Text("${widget.className} Schedule 📅"),
+-        backgroundColor: colorScheme.surface,
+-        foregroundColor: colorScheme.onSurface,
++        title: Text("$className Schedule 📅"),
++        backgroundColor: Colors.indigo,
++        foregroundColor: Colors.white,
+       ),
+       body: StreamBuilder<DocumentSnapshot>(
+-        // جلب بيانات الجدول عبر المتحكم
+-        stream: _controller.getScheduleStream(widget.classId),
++        // نبحث مباشرة باستخدام الـ ID لأننا استخدمناه كـ Document ID أثناء الإنشاء
++        stream: FirebaseFirestore.instance
++            .collection('schedules')
++            .doc(classId)
++            .snapshots(),
+         builder: (context, snapshot) {
+           if (snapshot.connectionState == ConnectionState.waiting) {
+             return const Center(child: CircularProgressIndicator());
+           }
+ 
+           if (!snapshot.hasData || !snapshot.data!.exists) {
+-            return Center(
++            return const Center(
+               child: Column(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+-                  Icon(Icons.event_busy, size: 80, color: colorScheme.onSurface.withOpacity(0.3)),
++                  Icon(Icons.event_busy, size: 80, color: Colors.grey),
+                   Text(
+                     "No schedule published yet.",
+-                    style: TextStyle(fontSize: 18, color: colorScheme.onSurface.withOpacity(0.5)),
++                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                   ),
+                 ],
+               ),
+             );
+           }
+ 
++          // جلب البيانات
+           var data = snapshot.data!.data() as Map<String, dynamic>;
+           Map<String, dynamic> daysMap = data['days'] ?? {};
+ 
+           return ListView.builder(
+             padding: const EdgeInsets.all(16),
+-            itemCount: _controller.orderedDays.length,
++            itemCount: orderedDays.length,
+             itemBuilder: (context, index) {
+-              String dayName = _controller.orderedDays[index];
++              String dayName = orderedDays[index];
+               List<dynamic> sessions = daysMap[dayName] ?? [];
+ 
+-              if (sessions.isEmpty) return const SizedBox();
+-
+-              // الحصول على اللون المخصص لليوم أو استخدام اللون الافتراضي
+-              Color dayColor = _dayColors[dayName] ?? colorScheme.primary;
++              if (sessions.isEmpty)
++                return const SizedBox(); // تخطي الأيام الفارغة
+ 
+               return Card(
+                 margin: const EdgeInsets.only(bottom: 12),
+-                elevation: 0,
+-                color: colorScheme.primaryContainer.withOpacity(0.4),
++                elevation: 3,
+                 shape: RoundedRectangleBorder(
+                   borderRadius: BorderRadius.circular(12),
+-                  side: BorderSide(color: dayColor.withOpacity(0.3), width: 1),
+                 ),
+                 child: ExpansionTile(
+-                  collapsedIconColor: dayColor,
+-                  iconColor: dayColor,
+                   leading: Container(
+-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
++                    padding: const EdgeInsets.all(8),
+                     decoration: BoxDecoration(
+-                      color: dayColor.withOpacity(0.15),
++                      color: Colors.indigo.shade50,
+                       borderRadius: BorderRadius.circular(8),
+                     ),
+                     child: Text(
+                       dayName.substring(0, 3).toUpperCase(),
+-                      style: TextStyle(
++                      style: const TextStyle(
+                         fontWeight: FontWeight.bold,
+-                        color: dayColor,
++                        color: Colors.indigo,
+                       ),
+                     ),
+                   ),
+                   title: Text(
+                     dayName,
+-                    style: TextStyle(
+-                      fontWeight: FontWeight.bold,
+-                      color: colorScheme.onSurface,
+-                    ),
++                    style: const TextStyle(fontWeight: FontWeight.bold),
+                   ),
+-                  subtitle: Text(
+-                    "${sessions.length} Classes",
+-                    style: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
+-                  ),
++                  subtitle: Text("${sessions.length} Classes"),
+                   children: sessions.map((session) {
+                     return ListTile(
+-                      leading: Icon(Icons.class_outlined, color: dayColor.withOpacity(0.7)),
++                      leading: const Icon(Icons.class_, color: Colors.orange),
+                       title: Text(
+                         session['subject'],
+-                        style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface),
++                        style: const TextStyle(fontWeight: FontWeight.bold),
+                       ),
+-                      subtitle: Text(
+-                        session['time'],
+-                        style: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
++                      subtitle: Text(session['time']),
++                      trailing: const Icon(
++                        Icons.arrow_forward_ios,
++                        size: 12,
++                        color: Colors.grey,
+                       ),
+                     );
+                   }).toList(),
+@@ -144,3 +120,4 @@
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/admin_setup_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/admin_setup_screen.dart b/smart_school/lib/screens/admin_setup_screen.dart
+new file mode 100644
+--- /dev/null	(date 1768073071315)
++++ b/smart_school/lib/screens/admin_setup_screen.dart	(date 1768073071315)
+@@ -0,0 +1,261 @@
++// lib/admin_setup_screen.dart
++
++import 'package:flutter/material.dart';
++import 'package:cloud_firestore/cloud_firestore.dart';
++import 'package:firebase_auth/firebase_auth.dart';
++
++class AdminSetupScreen extends StatefulWidget {
++  const AdminSetupScreen({super.key});
++
++  @override
++  State<AdminSetupScreen> createState() => _AdminSetupScreenState();
++}
++
++class _AdminSetupScreenState extends State<AdminSetupScreen> {
++  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
++  bool _isLoading = false;
++
++  // 1. Seeding Classes (English)
++  Future<void> _seedClasses() async {
++    setState(() => _isLoading = true);
++
++    // قائمة الصفوف باللغة الإنجليزية
++    List<String> classes = [
++      "Grade 10-A",
++      "Grade 10-B",
++      "Grade 11-A",
++      "Grade 11-B",
++      "Grade 12-A",
++    ];
++
++    WriteBatch batch = _firestore.batch();
++
++    for (String className in classes) {
++      DocumentReference ref = _firestore.collection('classes').doc();
++      batch.set(ref, {
++        'name': className,
++        'created_at': FieldValue.serverTimestamp(),
++      });
++    }
++
++    try {
++      await batch.commit();
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(
++          const SnackBar(
++            content: Text("✅ Classes (English) Added Successfully!"),
++          ),
++        );
++      }
++    } catch (e) {
++      print("Error: $e");
++    }
++
++    setState(() => _isLoading = false);
++  }
++
++  // 2. Seeding Bus Routes (English)
++  Future<void> _seedBusRoutes() async {
++    setState(() => _isLoading = true);
++
++    // نستخدم الـ UID الحالي للسائق لغرض التجربة، لكي يظهر الباص في حسابك
++    String currentDriverId =
++        FirebaseAuth.instance.currentUser?.uid ?? "unknown_driver";
++
++    List<Map<String, dynamic>> routes = [
++      {
++        'route_name': 'North Route (City Center)',
++        'plate_number': 'ABC-123',
++        'driver_id': currentDriverId, // مربوط بحسابك الحالي
++        'capacity': 25,
++      },
++      {
++        'route_name': 'South Route (Flower District)',
++        'plate_number': 'XYZ-999',
++        'driver_id': 'driver_02_uid', // سائق وهمي آخر
++        'capacity': 30,
++      },
++      {
++        'route_name': 'East Route (Industrial Area)',
++        'plate_number': 'DXB-555',
++        'driver_id': 'driver_03_uid',
++        'capacity': 20,
++      },
++    ];
++
++    WriteBatch batch = _firestore.batch();
++
++    for (var route in routes) {
++      DocumentReference ref = _firestore.collection('bus_routes').doc();
++      batch.set(ref, {...route, 'created_at': FieldValue.serverTimestamp()});
++    }
++
++    try {
++      await batch.commit();
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(
++          const SnackBar(
++            content: Text("✅ Bus Routes (English) Added Successfully!"),
++          ),
++        );
++      }
++    } catch (e) {
++      print("Error: $e");
++    }
++
++    setState(() => _isLoading = false);
++  }
++
++  // 3. دالة ربط الطلاب بالصفوف والخطوط (Assign Students)
++  // 3. دالة ترقية ملفات الطلاب (Profile Upgrade)
++  Future<void> _upgradeStudentProfiles() async {
++    setState(() => _isLoading = true);
++
++    User? currentUser = FirebaseAuth.instance.currentUser;
++    if (currentUser == null) {
++      ScaffoldMessenger.of(context).showSnackBar(
++        const SnackBar(
++          content: Text("⚠️ You must be logged in to assign Parent UID"),
++        ),
++      );
++      setState(() => _isLoading = false);
++      return;
++    }
++
++    try {
++      // 1. جلب البيانات اللازمة
++      var studentsSnapshot = await _firestore.collection('students').get();
++      var classesSnapshot = await _firestore.collection('classes').get();
++      var routesSnapshot = await _firestore.collection('bus_routes').get();
++
++      if (studentsSnapshot.docs.isEmpty) {
++        ScaffoldMessenger.of(context).showSnackBar(
++          const SnackBar(content: Text("No students found to upgrade!")),
++        );
++        setState(() => _isLoading = false);
++        return;
++      }
++
++      // تجهيز قوائم IDs للتوزيع العشوائي
++      List<String> classIds = classesSnapshot.docs.map((e) => e.id).toList();
++      List<String> busIds = routesSnapshot.docs.map((e) => e.id).toList();
++
++      WriteBatch batch = _firestore.batch();
++      int i = 0;
++
++      for (var studentDoc in studentsSnapshot.docs) {
++        // توزيع الطلاب على الصفوف والباصات بالتناوب
++        String assignedClassId = classIds.isNotEmpty
++            ? classIds[i % classIds.length]
++            : 'unknown_class';
++        String assignedBusId = busIds.isNotEmpty
++            ? busIds[i % busIds.length]
++            : 'unknown_bus';
++
++        batch.update(studentDoc.reference, {
++          // الحقول الجديدة المطلوبة
++          'class_id': assignedClassId,
++          'bus_id': assignedBusId,
++
++          // ربط الطالب بحسابك الحالي لتتمكن من رؤيته في شاشة الأهل
++          'parent_uid': currentUser.uid,
++
++          // رقم هاتف افتراضي
++          'parent_phone_1': '0501234567',
++
++          // حقول إضافية مفيدة للعرض السريع (Optional but recommended)
++          'updated_at': FieldValue.serverTimestamp(),
++        });
++        i++;
++      }
++
++      await batch.commit();
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(
++          SnackBar(
++            content: Text(
++              "✅ Upgraded ${studentsSnapshot.docs.length} students & Linked to YOU!",
++            ),
++          ),
++        );
++      }
++    } catch (e) {
++      print("Error upgrading: $e");
++      ScaffoldMessenger.of(
++        context,
++      ).showSnackBar(SnackBar(content: Text("Error: $e")));
++    }
++
++    setState(() => _isLoading = false);
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      appBar: AppBar(title: const Text("Admin Setup 🛠️")),
++      body: Center(
++        child: _isLoading
++            ? const CircularProgressIndicator()
++            : Column(
++                mainAxisAlignment: MainAxisAlignment.center,
++                children: [
++                  const Text(
++                    "Initialize System Data",
++                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
++                  ),
++                  const SizedBox(height: 10),
++                  const Text(
++                    "Click buttons once to seed data",
++                    style: TextStyle(color: Colors.grey),
++                  ),
++                  const SizedBox(height: 30),
++
++                  // Generate Classes Button
++                  ElevatedButton.icon(
++                    onPressed: _seedClasses,
++                    icon: const Icon(Icons.school),
++                    label: const Text("Generate Classes (Grade 10-A...)"),
++                    style: ElevatedButton.styleFrom(
++                      minimumSize: const Size(280, 50),
++                      backgroundColor: Colors.indigo,
++                      foregroundColor: Colors.white,
++                    ),
++                  ),
++
++                  const SizedBox(height: 20),
++
++                  // Generate Bus Routes Button
++                  ElevatedButton.icon(
++                    onPressed: _seedBusRoutes,
++                    icon: const Icon(Icons.directions_bus),
++                    label: const Text("Generate Bus Routes"),
++                    style: ElevatedButton.styleFrom(
++                      minimumSize: const Size(280, 50),
++                      backgroundColor: Colors.orange,
++                      foregroundColor: Colors.white,
++                    ),
++                  ),
++                  const SizedBox(height: 20),
++
++                  // زر الربط السحري
++                  const SizedBox(height: 20),
++
++                  // زر الترقية والربط
++                  ElevatedButton.icon(
++                    onPressed: _upgradeStudentProfiles,
++                    icon: const Icon(Icons.upgrade),
++                    label: const Text("Upgrade Profiles & Link to ME"),
++                    // Link to Me تعني ربطهم بحسابك الحالي
++                    style: ElevatedButton.styleFrom(
++                      minimumSize: const Size(280, 50),
++                      backgroundColor: Colors.purple, // لون مميز للترقية
++                      foregroundColor: Colors.white,
++                    ),
++                  ),
++                ],
++              ),
++      ),
++    );
++  }
++}
++
+Index: smart_school/lib/screens/assignments_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/assignments_screen.dart b/smart_school/lib/screens/assignments_screen.dart
+--- a/smart_school/lib/screens/assignments_screen.dart
++++ b/smart_school/lib/screens/assignments_screen.dart	(date 1768073071315)
+@@ -1,13 +1,11 @@
+-// lib/screens/assignments_screen.dart
++// lib/assignments_screen.dart
+ 
+ import 'package:flutter/material.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
+ import 'package:intl/intl.dart';
+-import 'package:url_launcher/url_launcher.dart';
+-import 'package:smart_school/controllers/academic_controller.dart';
++import 'package:url_launcher/url_launcher.dart'; // 👈 لفتح الروابط
+ 
+-/// شاشة الواجبات المدرسية: تعرض قائمة بالواجبات المطلوبة لكل صف مع إمكانية تحميل المرفقات
+-class AssignmentsScreen extends StatefulWidget {
++class AssignmentsScreen extends StatelessWidget {
+   final String classId;
+   final String className;
+ 
+@@ -17,42 +15,27 @@
+     required this.className,
+   });
+ 
+-  @override
+-  State<AssignmentsScreen> createState() => _AssignmentsScreenState();
+-}
+-
+-class _AssignmentsScreenState extends State<AssignmentsScreen> {
+-  late AcademicController _controller;
+-
+-  @override
+-  void initState() {
+-    super.initState();
+-    _controller = AcademicController();
+-  }
+-
+-  /// وظيفة فتح روابط المرفقات (مثل ملفات PDF) في المتصفح الخارجي
++  // دالة لفتح الرابط
+   Future<void> _launchURL(String url) async {
+     final Uri uri = Uri.parse(url);
+     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+-      ScaffoldMessenger.of(context).showSnackBar(
+-        const SnackBar(content: Text("Could not open attachment link")),
+-      );
++      throw Exception('Could not launch $url');
+     }
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final colorScheme = Theme.of(context).colorScheme;
+-
+     return Scaffold(
+       appBar: AppBar(
+-        title: Text("${widget.className} Assignments 📚"),
+-        backgroundColor: Colors.indigo.shade800,
++        title: Text("$className Assignments 📚"),
++        backgroundColor: Colors.indigo,
+         foregroundColor: Colors.white,
+       ),
+       body: StreamBuilder<QuerySnapshot>(
+-        // جلب الواجبات عبر المتحكم الأكاديمي
+-        stream: _controller.getAssignmentsStream(widget.classId),
++        stream: FirebaseFirestore.instance
++            .collection('assignments')
++            .where('class_id', isEqualTo: classId)
++            .snapshots(),
+         builder: (context, snapshot) {
+           if (snapshot.connectionState == ConnectionState.waiting) {
+             return const Center(child: CircularProgressIndicator());
+@@ -63,7 +46,11 @@
+               child: Column(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+-                  Icon(Icons.assignment_turned_in, size: 80, color: Colors.grey),
++                  Icon(
++                    Icons.assignment_turned_in,
++                    size: 80,
++                    color: Colors.grey,
++                  ),
+                   SizedBox(height: 10),
+                   Text(
+                     "No pending assignments! 🎉",
+@@ -78,20 +65,20 @@
+             padding: const EdgeInsets.all(16),
+             itemCount: snapshot.data!.docs.length,
+             itemBuilder: (context, index) {
+-              var data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
++              var data =
++                  snapshot.data!.docs[index].data() as Map<String, dynamic>;
+ 
++              // معالجة التاريخ
+               Timestamp? dueTs = data['due_date'];
+               String dateStr = dueTs != null
+                   ? DateFormat('EEE, MMM d').format(dueTs.toDate())
+                   : "No Due Date";
+ 
+               return Card(
+-                elevation: 0,
+-                color: Colors.indigo.withOpacity(0.05),
++                elevation: 3,
+                 margin: const EdgeInsets.only(bottom: 15),
+                 shape: RoundedRectangleBorder(
+-                  borderRadius: BorderRadius.circular(15),
+-                  side: BorderSide(color: Colors.indigo.withOpacity(0.1)),
++                  borderRadius: BorderRadius.circular(12),
+                 ),
+                 child: Padding(
+                   padding: const EdgeInsets.all(16.0),
+@@ -101,64 +88,59 @@
+                       Row(
+                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                         children: [
+-                          // تصنيف المادة
+                           Container(
+-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
++                            padding: const EdgeInsets.symmetric(
++                              horizontal: 8,
++                              vertical: 4,
++                            ),
+                             decoration: BoxDecoration(
+-                              color: Colors.indigo,
++                              color: Colors.orange.shade100,
+                               borderRadius: BorderRadius.circular(8),
+                             ),
+                             child: Text(
+                               data['subject'] ?? "General",
+-                              style: const TextStyle(
+-                                color: Colors.white,
++                              style: TextStyle(
++                                color: Colors.orange.shade800,
+                                 fontWeight: FontWeight.bold,
+                                 fontSize: 12,
+                               ),
+                             ),
+                           ),
+-                          // تاريخ التسليم
+-                          Row(
+-                            children: [
+-                              const Icon(Icons.timer_outlined, size: 14, color: Colors.red),
+-                              const SizedBox(width: 4),
+-                              Text(
+-                                "Due: $dateStr",
+-                                style: const TextStyle(
+-                                  color: Colors.red,
+-                                  fontWeight: FontWeight.bold,
+-                                  fontSize: 12,
+-                                ),
+-                              ),
+-                            ],
++                          Text(
++                            "Due: $dateStr",
++                            style: const TextStyle(
++                              color: Colors.red,
++                              fontWeight: FontWeight.bold,
++                              fontSize: 12,
++                            ),
+                           ),
+                         ],
+                       ),
+-                      const SizedBox(height: 15),
++                      const SizedBox(height: 10),
+                       Text(
+                         data['title'] ?? "No Title",
+-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo),
++                        style: const TextStyle(
++                          fontSize: 18,
++                          fontWeight: FontWeight.bold,
++                        ),
+                       ),
+-                      const SizedBox(height: 8),
++                      const SizedBox(height: 5),
+                       Text(
+                         data['description'] ?? "",
+-                        style: TextStyle(color: Colors.grey.shade700, height: 1.4),
++                        style: TextStyle(color: Colors.grey[700]),
+                       ),
+-                      const SizedBox(height: 20),
++                      const SizedBox(height: 15),
+ 
+-                      // زر تحميل المرفق إن وجد
++                      // زر المرفقات
+                       if (data['attachment_url'] != null)
+                         SizedBox(
+                           width: double.infinity,
+-                          child: ElevatedButton.icon(
++                          child: OutlinedButton.icon(
+                             onPressed: () => _launchURL(data['attachment_url']),
+                             icon: const Icon(Icons.download),
+                             label: const Text("Download Attachment (PDF)"),
+-                            style: ElevatedButton.styleFrom(
+-                              backgroundColor: Colors.indigo,
+-                              foregroundColor: Colors.white,
+-                              elevation: 0,
+-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
++                            style: OutlinedButton.styleFrom(
++                              foregroundColor: Colors.indigo,
+                             ),
+                           ),
+                         ),
+@@ -173,3 +155,4 @@
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/exam_results_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/exam_results_screen.dart b/smart_school/lib/screens/exam_results_screen.dart
+--- a/smart_school/lib/screens/exam_results_screen.dart
++++ b/smart_school/lib/screens/exam_results_screen.dart	(date 1768073071315)
+@@ -1,44 +1,37 @@
+-// lib/screens/exam_results_screen.dart
++// lib/exam_results_screen.dart
+ 
+ import 'package:flutter/material.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
+-import 'package:smart_school/controllers/academic_controller.dart';
+ 
+-/// شاشة نتائج الامتحانات: تعرض درجات الطالب مع التقديرات الملونة
+-class ExamResultsScreen extends StatefulWidget {
++class ExamResultsScreen extends StatelessWidget {
+   final String studentId;
+   final String studentName;
+ 
+-  const ExamResultsScreen({
+-    super.key,
+-    required this.studentId,
+-    required this.studentName,
+-  });
+-
+-  @override
+-  State<ExamResultsScreen> createState() => _ExamResultsScreenState();
+-}
++  const ExamResultsScreen({super.key, required this.studentId, required this.studentName});
+ 
+-class _ExamResultsScreenState extends State<ExamResultsScreen> {
+-  late AcademicController _controller;
+-
+-  @override
+-  void initState() {
+-    super.initState();
+-    _controller = AcademicController();
++  // دالة مساعدة لتحديد اللون والتقدير حسب الدرجة
++  Map<String, dynamic> _getGradeInfo(int score) {
++    if (score >= 90) return {'grade': 'A', 'color': Colors.green, 'label': 'Excellent'};
++    if (score >= 80) return {'grade': 'B', 'color': Colors.blue, 'label': 'Very Good'};
++    if (score >= 70) return {'grade': 'C', 'color': Colors.orange, 'label': 'Good'};
++    if (score >= 60) return {'grade': 'D', 'color': Colors.amber, 'label': 'Pass'};
++    return {'grade': 'F', 'color': Colors.red, 'label': 'Fail'};
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+     return Scaffold(
+       appBar: AppBar(
+-        title: Text("${widget.studentName}'s Grades 🎓"),
+-        backgroundColor: Colors.teal.shade700,
++        title: Text("$studentName's Grades 🎓"),
++        backgroundColor: Colors.indigo,
+         foregroundColor: Colors.white,
+       ),
+       body: StreamBuilder<QuerySnapshot>(
+-        // جلب نتائج الامتحانات من المتحكم
+-        stream: _controller.getExamResultsStream(widget.studentId),
++        stream: FirebaseFirestore.instance
++            .collection('exam_results')
++            .where('student_id', isEqualTo: studentId)
++        // .orderBy('subject') // قد يحتاج لفهرس، اتركه معلقاً الآن
++            .snapshots(),
+         builder: (context, snapshot) {
+           if (snapshot.connectionState == ConnectionState.waiting) {
+             return const Center(child: CircularProgressIndicator());
+@@ -50,8 +43,7 @@
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+                   Icon(Icons.feed_outlined, size: 80, color: Colors.grey),
+-                  Text("No grades published yet.",
+-                      style: TextStyle(color: Colors.grey)),
++                  Text("No grades published yet.", style: TextStyle(color: Colors.grey)),
+                 ],
+               ),
+             );
+@@ -61,24 +53,17 @@
+             padding: const EdgeInsets.all(16),
+             itemCount: snapshot.data!.docs.length,
+             itemBuilder: (context, index) {
+-              var data =
+-                  snapshot.data!.docs[index].data() as Map<String, dynamic>;
++              var data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+ 
+               int score = data['score'] ?? 0;
+               int maxScore = data['max_score'] ?? 100;
+               double percentage = score / maxScore;
+-              
+-              // الحصول على التقدير واللون بناءً على الدرجة من المتحكم
+-              var gradeInfo = _controller.getGradeInfo(score);
++              var gradeInfo = _getGradeInfo(score);
+ 
+               return Card(
+-                elevation: 0,
+-                color: (gradeInfo['color'] as Color).withOpacity(0.05),
++                elevation: 3,
+                 margin: const EdgeInsets.only(bottom: 15),
+-                shape: RoundedRectangleBorder(
+-                  borderRadius: BorderRadius.circular(15),
+-                  side: BorderSide(color: (gradeInfo['color'] as Color).withOpacity(0.2)),
+-                ),
++                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                 child: Padding(
+                   padding: const EdgeInsets.all(16.0),
+                   child: Column(
+@@ -89,49 +74,28 @@
+                           Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                             children: [
+-                              Text(data['subject'],
+-                                  style: const TextStyle(
+-                                      fontSize: 18,
+-                                      fontWeight: FontWeight.bold,
+-                                      color: Colors.white)),
+-                              Text(data['exam_type'],
+-                                  style: TextStyle(
+-                                      color: Colors.grey[600], fontSize: 12)),
++                              Text(data['subject'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
++                              Text(data['exam_type'], style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                             ],
+                           ),
+                           Container(
+-                            padding: const EdgeInsets.symmetric(
+-                                horizontal: 12, vertical: 8),
++                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                             decoration: BoxDecoration(
+-                              color: (gradeInfo['color'] as Color),
++                              color: gradeInfo['color'].withOpacity(0.1),
+                               borderRadius: BorderRadius.circular(10),
+-                              boxShadow: [
+-                                BoxShadow(
+-                                  color: (gradeInfo['color'] as Color).withOpacity(0.3),
+-                                  blurRadius: 4,
+-                                  offset: const Offset(0, 2),
+-                                )
+-                              ],
++                              border: Border.all(color: gradeInfo['color']),
+                             ),
+                             child: Column(
+                               children: [
+-                                Text("${gradeInfo['grade']}",
+-                                    style: const TextStyle(
+-                                        fontSize: 20,
+-                                        fontWeight: FontWeight.bold,
+-                                        color: Colors.white)),
+-                                Text("$score / $maxScore",
+-                                    style: const TextStyle(
+-                                        fontSize: 10,
+-                                        fontWeight: FontWeight.bold,
+-                                        color: Colors.white70)),
++                                Text("${gradeInfo['grade']}", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: gradeInfo['color'])),
++                                Text("$score / $maxScore", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                               ],
+                             ),
+                           ),
+                         ],
+                       ),
+                       const SizedBox(height: 15),
+-                      // شريط التقدم الملون حسب التقدير
++                      // شريط التقدم
+                       ClipRRect(
+                         borderRadius: BorderRadius.circular(10),
+                         child: LinearProgressIndicator(
+@@ -141,24 +105,10 @@
+                           color: gradeInfo['color'],
+                         ),
+                       ),
+-                      const SizedBox(height: 8),
+-                      Row(
+-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+-                        children: [
+-                          Text(
+-                            "${(percentage * 100).toInt()}%",
+-                            style: TextStyle(
+-                              fontWeight: FontWeight.bold,
+-                              color: gradeInfo['color'],
+-                              fontSize: 12,
+-                            ),
+-                          ),
+-                          Text(gradeInfo['label'],
+-                              style: TextStyle(
+-                                  color: gradeInfo['color'],
+-                                  fontWeight: FontWeight.bold,
+-                                  fontSize: 12)),
+-                        ],
++                      const SizedBox(height: 5),
++                      Align(
++                        alignment: Alignment.centerRight,
++                        child: Text(gradeInfo['label'], style: TextStyle(color: gradeInfo['color'], fontWeight: FontWeight.bold, fontSize: 12)),
+                       ),
+                     ],
+                   ),
+@@ -171,3 +121,4 @@
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/notifications_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/notifications_screen.dart b/smart_school/lib/screens/notifications_screen.dart
+--- a/smart_school/lib/screens/notifications_screen.dart
++++ b/smart_school/lib/screens/notifications_screen.dart	(date 1768073071322)
+@@ -1,31 +1,28 @@
+-// lib/screens/notifications_screen.dart
++// lib/notifications_screen.dart
+ 
+ import 'package:flutter/material.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
+ import 'package:firebase_auth/firebase_auth.dart';
+ import 'package:intl/intl.dart';
+ 
+-/// شاشة التنبيهات: تعرض جميع الإشعارات المرسلة للوالد (مثل صعود/نزول الطلاب)
+ class NotificationsScreen extends StatelessWidget {
+   const NotificationsScreen({super.key});
+ 
+   @override
+   Widget build(BuildContext context) {
+     String? uid = FirebaseAuth.instance.currentUser?.uid;
+-    final colorScheme = Theme.of(context).colorScheme;
+ 
+     return Scaffold(
+-      backgroundColor: colorScheme.surface,
+       appBar: AppBar(
+-        title: const Text("Notifications 🔔", style: TextStyle(fontWeight: FontWeight.bold)),
+-        backgroundColor: Colors.amber.shade800,
++        title: const Text("Notifications 🔔"),
++        backgroundColor: Colors.indigo,
+         foregroundColor: Colors.white,
+         actions: [
+-          // زر لتحديد جميع الإشعارات كمقروءة دفعة واحدة
+           IconButton(
+             icon: const Icon(Icons.done_all),
+             tooltip: "Mark all as read",
+             onPressed: () async {
++              // تحديث كل الإشعارات لتصبح مقروءة
+               var batch = FirebaseFirestore.instance.batch();
+               var snaps = await FirebaseFirestore.instance
+                   .collection('notifications')
+@@ -42,10 +39,10 @@
+         ],
+       ),
+       body: StreamBuilder<QuerySnapshot>(
+-        // جلب الإشعارات الخاصة بالوالد الحالي مرتبة من الأحدث للأقدم
+         stream: FirebaseFirestore.instance
+             .collection('notifications')
+             .where('parent_uid', isEqualTo: uid)
++            //.orderBy('created_at', descending: true)
+             .snapshots(),
+         builder: (context, snapshot) {
+           if (snapshot.connectionState == ConnectionState.waiting) {
+@@ -53,34 +50,28 @@
+           }
+ 
+           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+-            return Center(
++            return const Center(
+               child: Column(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+-                  Icon(Icons.notifications_off_outlined, size: 80, color: colorScheme.onSurface.withOpacity(0.3)),
+-                  const SizedBox(height: 10),
+-                  Text("No notifications yet.", style: TextStyle(color: colorScheme.onSurface.withOpacity(0.5))),
++                  Icon(Icons.notifications_off, size: 80, color: Colors.grey),
++                  Text(
++                    "No notifications yet.",
++                    style: TextStyle(color: Colors.grey),
++                  ),
+                 ],
+               ),
+             );
+           }
+-
+-          // ترتيب الإشعارات يدوياً لتجنب الحاجة لفهرس (Index) في Firebase حالياً
+-          var docs = snapshot.data!.docs;
+-          docs.sort((a, b) {
+-            var aTime = (a.data() as Map)['created_at'] as Timestamp?;
+-            var bTime = (b.data() as Map)['created_at'] as Timestamp?;
+-            return (bTime?.seconds ?? 0).compareTo(aTime?.seconds ?? 0);
+-          });
+ 
+           return ListView.builder(
+-            itemCount: docs.length,
+-            padding: const EdgeInsets.symmetric(vertical: 10),
++            itemCount: snapshot.data!.docs.length,
+             itemBuilder: (context, index) {
+-              var data = docs[index].data() as Map<String, dynamic>;
++              var data =
++                  snapshot.data!.docs[index].data() as Map<String, dynamic>;
+               bool isRead = data['is_read'] ?? false;
+ 
+-              // تنسيق وقت وصول الإشعار
++              // تنسيق الوقت
+               String timeStr = "Just now";
+               if (data['created_at'] != null) {
+                 DateTime dt = (data['created_at'] as Timestamp).toDate();
+@@ -88,21 +79,17 @@
+               }
+ 
+               return Card(
+-                elevation: 0,
+-                color: isRead ? colorScheme.primaryContainer.withOpacity(0.3) : Colors.amber.withOpacity(0.15),
+-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+-                shape: RoundedRectangleBorder(
+-                  borderRadius: BorderRadius.circular(15),
+-                  side: BorderSide(
+-                    color: isRead ? colorScheme.onSurface.withOpacity(0.1) : Colors.amber.withOpacity(0.3),
+-                  ),
+-                ),
++                color: isRead ? Colors.white : Colors.blue.shade50,
++                // تمييز غير المقروء
++                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                 child: ListTile(
+                   leading: CircleAvatar(
+-                    backgroundColor: isRead ? colorScheme.secondary.withOpacity(0.2) : Colors.amber,
++                    backgroundColor: isRead ? Colors.grey : Colors.indigo,
+                     child: Icon(
+-                      data['type'] == 'pickup' ? Icons.directions_bus : Icons.home,
+-                      color: isRead ? colorScheme.onSurface.withOpacity(0.7) : Colors.white,
++                      data['type'] == 'pickup'
++                          ? Icons.directions_bus
++                          : Icons.home,
++                      color: Colors.white,
+                       size: 20,
+                     ),
+                   ),
+@@ -110,25 +97,26 @@
+                     data['title'] ?? "Notification",
+                     style: TextStyle(
+                       fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+-                      color: colorScheme.onSurface,
+                     ),
+                   ),
+                   subtitle: Column(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+-                      const SizedBox(height: 4),
++                      const SizedBox(height: 5),
++                      Text(data['body'] ?? ""),
++                      const SizedBox(height: 5),
+                       Text(
+-                        data['body'] ?? "",
+-                        style: TextStyle(color: colorScheme.onSurface.withOpacity(0.8)),
++                        timeStr,
++                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                       ),
+-                      const SizedBox(height: 6),
+-                      Text(timeStr, style: TextStyle(fontSize: 10, color: colorScheme.onSurface.withOpacity(0.5))),
+                     ],
+                   ),
+                   onTap: () {
+-                    // عند النقر على الإشعار، يتم تحديث حالته لمقروء
++                    // عند الضغط، نحددها كمقروءة
+                     if (!isRead) {
+-                      docs[index].reference.update({'is_read': true});
++                      snapshot.data!.docs[index].reference.update({
++                        'is_read': true,
++                      });
+                     }
+                   },
+                 ),
+@@ -140,3 +128,4 @@
+     );
+   }
+ }
++
+Index: smart_school/lib/screens/admin_dashboard_screen.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/screens/admin_dashboard_screen.dart b/smart_school/lib/screens/admin_dashboard_screen.dart
+--- a/smart_school/lib/screens/admin_dashboard_screen.dart
++++ b/smart_school/lib/screens/admin_dashboard_screen.dart	(date 1768073071315)
+@@ -1,9 +1,9 @@
+-// lib/screens/admin_dashboard_screen.dart
++// lib/admin_dashboard_screen.dart
+ 
+ import 'package:flutter/material.dart';
+-import 'package:smart_school/controllers/admin_controller.dart';
++import 'package:cloud_firestore/cloud_firestore.dart';
++import 'package:firebase_auth/firebase_auth.dart';
+ 
+-/// لوحة تحكم المسؤول: تتيح توليد البيانات التجريبية وإدارة النظام
+ class AdminDashboardScreen extends StatefulWidget {
+   const AdminDashboardScreen({super.key});
+ 
+@@ -12,47 +12,288 @@
+ }
+ 
+ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+-  late AdminController _controller;
++  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
++  bool _isLoading = false;
++
++  // --- 1. Infrastructure (Classes & Routes) ---
++
++  Future<void> _seedClasses() async {
++    setState(() => _isLoading = true);
++    List<String> classes = [
++      "Grade 10-A",
++      "Grade 10-B",
++      "Grade 11-A",
++      "Grade 11-B",
++      "Grade 12-A",
++    ];
++    WriteBatch batch = _firestore.batch();
++    for (String className in classes) {
++      DocumentReference ref = _firestore.collection('classes').doc();
++      batch.set(ref, {
++        'name': className,
++        'created_at': FieldValue.serverTimestamp(),
++      });
++    }
++    await batch.commit();
++    _showSnack("✅ Classes Generated!");
++    setState(() => _isLoading = false);
++  }
++
++  Future<void> _seedBusRoutes() async {
++    setState(() => _isLoading = true);
++    String currentDriverId =
++        FirebaseAuth.instance.currentUser?.uid ?? "unknown_driver";
++    List<Map<String, dynamic>> routes = [
++      {
++        'route_name': 'North Route (City Center)',
++        'plate_number': 'ABC-123',
++        'driver_id': currentDriverId,
++        'capacity': 25,
++      },
++      {
++        'route_name': 'South Route (Flower Dist)',
++        'plate_number': 'XYZ-999',
++        'driver_id': 'driver_02',
++        'capacity': 30,
++      },
++    ];
++    WriteBatch batch = _firestore.batch();
++    for (var route in routes) {
++      DocumentReference ref = _firestore.collection('bus_routes').doc();
++      batch.set(ref, {...route, 'created_at': FieldValue.serverTimestamp()});
++    }
++    await batch.commit();
++    _showSnack("✅ Bus Routes Generated!");
++    setState(() => _isLoading = false);
++  }
++
++  // --- 2. Students Management ---
++
++  Future<void> _assignStudentsToClassesAndRoutes() async {
++    setState(() => _isLoading = true);
++    try {
++      var classesSnapshot = await _firestore.collection('classes').get();
++      var routesSnapshot = await _firestore.collection('bus_routes').get();
++      var studentsSnapshot = await _firestore.collection('students').get();
++
++      if (classesSnapshot.docs.isEmpty || routesSnapshot.docs.isEmpty) {
++        _showSnack("❌ No classes or routes found!");
++        setState(() => _isLoading = false);
++        return;
++      }
++
++      List<String> classIds = classesSnapshot.docs.map((e) => e.id).toList();
++      List<String> classNames = classesSnapshot.docs
++          .map((e) => e['name'] as String)
++          .toList();
++
++      List<Map<String, dynamic>> routesData = routesSnapshot.docs
++          .map(
++            (doc) => {
++              'id': doc.id,
++              'name': doc['route_name'],
++              'plate': doc['plate_number'],
++            },
++          )
++          .toList();
++
++      WriteBatch batch = _firestore.batch();
++      int i = 0;
++
++      for (var studentDoc in studentsSnapshot.docs) {
++        // توزيع دوري
++        int classIndex = i % classIds.length;
++        int routeIndex = i % routesData.length;
++
++        batch.update(studentDoc.reference, {
++          'class_id': classIds[classIndex],
++          'class_name': classNames[classIndex], // للتسهيل
++          'bus_id': routesData[routeIndex]['id'],
++          'route_name': routesData[routeIndex]['name'],
++          'bus_plate': routesData[routeIndex]['plate'],
++        });
++        i++;
++      }
++      await batch.commit();
++      _showSnack("✅ Assigned ${studentsSnapshot.docs.length} students!");
++    } catch (e) {
++      _showSnack("Error: $e");
++    }
++    setState(() => _isLoading = false);
++  }
++
++  Future<void> _linkStudentsToMe() async {
++    setState(() => _isLoading = true);
++    User? user = FirebaseAuth.instance.currentUser;
++    if (user == null) {
++      _showSnack("⚠️ Not logged in!");
++      setState(() => _isLoading = false);
++      return;
++    }
++
++    var students = await _firestore.collection('students').get();
++    WriteBatch batch = _firestore.batch();
++    for (var doc in students.docs) {
++      batch.update(doc.reference, {'parent_uid': user.uid});
++    }
++    await batch.commit();
++    _showSnack("✅ All students linked to YOU!");
++    setState(() => _isLoading = false);
++  }
++
++  // --- 3. Academic (Schedules) ---
++
++  Future<void> _seedSchedules() async {
++    setState(() => _isLoading = true);
++
++    try {
++      // 1. جلب كل الصفوف
++      var classesSnapshot = await _firestore.collection('classes').get();
++
++      if (classesSnapshot.docs.isEmpty) {
++        ScaffoldMessenger.of(context).showSnackBar(
++          const SnackBar(
++            content: Text(
++              "⚠️ No classes found. Please generate classes first.",
++            ),
++          ),
++        );
++        setState(() => _isLoading = false);
++        return;
++      }
++
++      WriteBatch batch = _firestore.batch();
++
++      // أيام الأسبوع
++      List<String> weekDays = [
++        "Sunday",
++        "Monday",
++        "Tuesday",
++        "Wednesday",
++        "Thursday",
++      ];
++
++      // مواد دراسية عشوائية للتجربة
++      List<String> subjects = [
++        "Math",
++        "Physics",
++        "Chemistry",
++        "English",
++        "History",
++        "Computer Science",
++        "Biology",
++      ];
++
++      for (var classDoc in classesSnapshot.docs) {
++        String classId = classDoc.id;
++        String className = classDoc['name'];
++
++        // بناء جدول عشوائي لهذا الصف
++        Map<String, dynamic> daysSchedule = {};
++
++        for (var day in weekDays) {
++          // 3 حصص يومياً كمثال
++          daysSchedule[day] = [
++            {"subject": subjects[0], "time": "08:00 - 09:00"},
++            {"subject": subjects[1], "time": "09:00 - 10:00"},
++            {"subject": subjects[2], "time": "10:30 - 11:30"},
++          ];
++          // تدوير المواد لتغيير الجدول قليلاً
++          subjects.shuffle();
++        }
++
++        // استخدام classId كمعرف للوثيقة لسهولة البحث لاحقاً
++        DocumentReference ref = _firestore.collection('schedules').doc(classId);
++
++        batch.set(ref, {
++          'class_id': classId,
++          'class_name': className,
++          'days': daysSchedule,
++          'updated_at': FieldValue.serverTimestamp(),
++        });
++      }
++
++      await batch.commit();
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(
++          const SnackBar(content: Text("✅ Class Schedules Generated!")),
++        );
++      }
++    } catch (e) {
++      print("Error: $e");
++      ScaffoldMessenger.of(
++        context,
++      ).showSnackBar(SnackBar(content: Text("Error: $e")));
++    }
+ 
+-  @override
+-  void initState() {
+-    super.initState();
+-    _controller = AdminController();
++    setState(() => _isLoading = false);
+   }
+ 
+-  @override
+-  void dispose() {
+-    _controller.dispose();
+-    super.dispose();
+-  }
++  // 6. توليد واجبات مدرسية (Assignments Seeding)
++  Future<void> _seedAssignments() async {
++    setState(() => _isLoading = true);
++
++    try {
++      var classesSnapshot = await _firestore.collection('classes').get();
++      if (classesSnapshot.docs.isEmpty) {
++        _showSnack("❌ No classes found!");
++        setState(() => _isLoading = false);
++        return;
++      }
+ 
+-  /// وظيفة مساعدة لعرض رسالة (SnackBar)
++      WriteBatch batch = _firestore.batch();
++      List<String> subjects = ["Math", "Physics", "English", "Science"];
++
++      for (var classDoc in classesSnapshot.docs) {
++        // إنشاء 3 واجبات لكل صف
++        for (int i = 1; i <= 3; i++) {
++          DocumentReference ref = _firestore.collection('assignments').doc();
++
++          // تاريخ التسليم: بعد i أيام من الآن
++          DateTime dueDate = DateTime.now().add(Duration(days: i + 2));
++
++          batch.set(ref, {
++            'class_id': classDoc.id,
++            'class_name': classDoc['name'],
++            'subject': subjects[i % subjects.length],
++            'title': 'Homework #$i: ${subjects[i % subjects.length]} Basics',
++            'description':
++                'Please solve page ${10 * i} to ${10 * i + 2} in your workbook.',
++            'attachment_url':
++                'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
++            // رابط PDF تجريبي
++            'created_at': FieldValue.serverTimestamp(),
++            'due_date': Timestamp.fromDate(dueDate),
++          });
++        }
++      }
++
++      await batch.commit();
++      _showSnack("✅ Assignments Generated successfully!");
++    } catch (e) {
++      _showSnack("Error: $e");
++    }
++    setState(() => _isLoading = false);
++  }
++
++  // Helper
+   void _showSnack(String msg) {
+     if (!mounted) return;
+     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+   }
+ 
+-  /// بناء بطاقة (Card) لكل عملية إدارية
++  // Widget Builder for Grid Cards
+   Widget _buildAdminCard(
+     String title,
+     IconData icon,
+     Color color,
+-    Future<String> Function() action,
++    VoidCallback onTap,
+   ) {
+     return Card(
+-      elevation: 2,
+-      color: color.withOpacity(0.1),
+-      shape: RoundedRectangleBorder(
+-        borderRadius: BorderRadius.circular(15),
+-        side: BorderSide(color: color.withOpacity(0.3), width: 1),
+-      ),
++      elevation: 4,
++      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+       child: InkWell(
+-        onTap: _controller.isLoading
+-            ? null
+-            : () async {
+-                String result = await action();
+-                _showSnack(result);
+-              },
++        onTap: _isLoading ? null : onTap,
+         borderRadius: BorderRadius.circular(15),
+         child: Column(
+           mainAxisAlignment: MainAxisAlignment.center,
+@@ -62,97 +303,152 @@
+             Text(
+               title,
+               textAlign: TextAlign.center,
+-              style: TextStyle(
+-                fontWeight: FontWeight.bold,
+-                color: color.withOpacity(0.9),
+-              ),
++              style: const TextStyle(fontWeight: FontWeight.bold),
+             ),
+           ],
+         ),
+       ),
+     );
+   }
++
++  // 7. توليد نتائج الامتحانات (Exam Results Seeding)
++  Future<void> _seedExamResults() async {
++    setState(() => _isLoading = true);
++
++    try {
++      var studentsSnapshot = await _firestore.collection('students').get();
++      if (studentsSnapshot.docs.isEmpty) {
++        _showSnack("❌ No students found!");
++        setState(() => _isLoading = false);
++        return;
++      }
++
++      WriteBatch batch = _firestore.batch();
++      List<String> subjects = [
++        "Math",
++        "Physics",
++        "Chemistry",
++        "English",
++        "Biology",
++        "History",
++      ];
++      List<String> examTypes = ["Midterm Exam", "Final Exam"];
++
++      for (var student in studentsSnapshot.docs) {
++        // لكل طالب، ننشئ نتائج لكل المواد
++        for (var subject in subjects) {
++          // نختار عشوائياً نوع الامتحان (نصف فصلي أو نهائي)
++          String type = examTypes[DateTime.now().millisecond % 2];
++
++          // درجة عشوائية من 60 إلى 100
++          int score = 60 + (DateTime.now().microsecond % 41);
++          int maxScore = 100;
++
++          DocumentReference ref = _firestore.collection('exam_results').doc();
++
++          batch.set(ref, {
++            'student_id': student.id,
++            'student_name': student['name'],
++            'subject': subject,
++            'exam_type': type,
++            'score': score,
++            'max_score': maxScore,
++            'date': FieldValue.serverTimestamp(),
++            'created_at': FieldValue.serverTimestamp(),
++          });
++        }
++      }
++
++      await batch.commit();
++      _showSnack("✅ Exam Results Published!");
++    } catch (e) {
++      _showSnack("Error: $e");
++    }
++    setState(() => _isLoading = false);
++  }
+ 
+   @override
+   Widget build(BuildContext context) {
+-    return ListenableBuilder(
+-      listenable: _controller,
+-      builder: (context, _) {
+-        return Scaffold(
+-          appBar: AppBar(
+-            title: const Text("Admin Dashboard 🛠️"),
+-            backgroundColor: Colors.blueGrey.shade800,
+-            foregroundColor: Colors.white,
+-          ),
+-          body: _controller.isLoading
+-              ? const Center(child: CircularProgressIndicator())
+-              : Padding(
+-                  padding: const EdgeInsets.all(16.0),
+-                  child: GridView.count(
+-                    crossAxisCount: 2,
+-                    crossAxisSpacing: 16,
+-                    mainAxisSpacing: 16,
+-                    children: [
+-                      // قسم البنية التحتية
+-                      _buildAdminCard(
+-                        "1. Generate Classes",
+-                        Icons.school,
+-                        Colors.blue,
+-                        _controller.seedClasses,
+-                      ),
+-                      _buildAdminCard(
+-                        "2. Generate Routes",
+-                        Icons.directions_bus,
+-                        Colors.orangeAccent,
+-                        _controller.seedBusRoutes,
+-                      ),
++    return Scaffold(
++      appBar: AppBar(
++        title: const Text("Admin Dashboard 🛠️"),
++        backgroundColor: Colors.blueGrey,
++        foregroundColor: Colors.white,
++      ),
++      body: _isLoading
++          ? const Center(child: CircularProgressIndicator())
++          : Padding(
++              padding: const EdgeInsets.all(16.0),
++              child: GridView.count(
++                crossAxisCount: 2, // عمودين
++                crossAxisSpacing: 16,
++                mainAxisSpacing: 16,
++                children: [
++                  // 1. Infrastructure
++                  _buildAdminCard(
++                    "1. Generate Classes",
++                    Icons.school,
++                    Colors.indigo,
++                    _seedClasses,
++                  ),
++                  _buildAdminCard(
++                    "2. Generate Routes",
++                    Icons.directions_bus,
++                    Colors.orange,
++                    _seedBusRoutes,
++                  ),
+ 
+-                      // قسم إعداد الطلاب
+-                      _buildAdminCard(
+-                        "3. Assign Class/Bus",
+-                        Icons.link,
+-                        Colors.cyan,
+-                        _controller.assignStudents,
+-                      ),
+-                      _buildAdminCard(
+-                        "4. Link Students to ME",
+-                        Icons.person_pin,
+-                        Colors.purpleAccent,
+-                        _controller.linkStudentsToMe,
+-                      ),
++                  // 2. Student Setup
++                  _buildAdminCard(
++                    "3. Assign Class/Bus",
++                    Icons.link,
++                    Colors.teal,
++                    _assignStudentsToClassesAndRoutes,
++                  ),
++                  _buildAdminCard(
++                    "4. Link Students to ME",
++                    Icons.person_pin,
++                    Colors.purple,
++                    _linkStudentsToMe,
++                  ),
+ 
+-                      // القسم الأكاديمي
+-                      _buildAdminCard(
+-                        "5. Generate Schedules",
+-                        Icons.calendar_month,
+-                        Colors.amber.shade700,
+-                        _controller.seedSchedules,
+-                      ),
+-                      _buildAdminCard(
+-                        "6. Generate Homework",
+-                        Icons.assignment,
+-                        Colors.pinkAccent,
+-                        _controller.seedAssignments,
+-                      ),
+-                      _buildAdminCard(
+-                        "7. Publish Grades",
+-                        Icons.score,
+-                        Colors.greenAccent.shade700,
+-                        _controller.seedExamResults,
+-                      ),
++                  // 3. Academic
++                  _buildAdminCard(
++                    "5. Generate Schedules",
++                    Icons.calendar_month,
++                    Colors.brown,
++                    _seedSchedules,
++                  ),
++                  _buildAdminCard(
++                    "6. Generate Homework",
++                    Icons.assignment,
++                    Colors.deepOrange,
++                    _seedAssignments,
++                  ),
++                  _buildAdminCard(
++                    "7. Publish Grades",
++                    Icons.score,
++                    Colors.green.shade700,
++                    _seedExamResults,
++                  ),
+ 
+-                      // قسم إعادة الضبط
+-                      _buildAdminCard(
+-                        "Reset Attendance",
+-                        Icons.delete_forever,
+-                        Colors.redAccent,
+-                        _controller.clearAttendance,
+-                      ),
+-                    ],
+-                  ),
+-                ),
+-        );
+-      },
++                  // 4. Reset (Dangerous!)
++                  _buildAdminCard(
++                    "Reset Attendance",
++                    Icons.delete_forever,
++                    Colors.red,
++                    () async {
++                      var snap = await _firestore
++                          .collection('attendance')
++                          .get();
++                      for (var doc in snap.docs) await doc.reference.delete();
++                      _showSnack("🗑️ Attendance Cleared!");
++                    },
++                  ),
++                ],
++              ),
++            ),
+     );
+   }
+ }
++
+Index: smart_school/lib/main.dart
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/lib/main.dart b/smart_school/lib/main.dart
+--- a/smart_school/lib/main.dart
++++ b/smart_school/lib/main.dart	(date 1768073071311)
+@@ -3,11 +3,14 @@
+ import 'package:firebase_core/firebase_core.dart';
+ import 'package:flutter/material.dart';
+ import 'services/firebase_options.dart';
+-import 'screens/login_screen.dart';
++import 'screens/login_screen.dart'; // تأكد أن هذا موجود لاستدعاء شاشة الدخول
+ 
+ void main() async {
+   WidgetsFlutterBinding.ensureInitialized();
++
++  // تهيئة الفايربيس
+   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
++
+   runApp(const SmartSchoolApp());
+ }
+ 
+@@ -20,28 +23,10 @@
+       debugShowCheckedModeBanner: false,
+       title: 'Smart School',
+       theme: ThemeData(
++        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+         useMaterial3: true,
+-        // Using the user-specified color palette
+-        colorScheme: ColorScheme.fromSeed(
+-          seedColor: const Color(0xFF415A77),
+-          primary: const Color(0xFF415A77),
+-          secondary: const Color(0xFF778DA9),
+-          surface: const Color(0xFF0D1B2A),
+-          onSurface: const Color(0xFFE0E1DD),
+-          primaryContainer: const Color(0xFF1B263B),
+-          onPrimaryContainer: const Color(0xFFE0E1DD),
+-        ),
+-        scaffoldBackgroundColor: const Color(0xFF0D1B2A),
+-        appBarTheme: const AppBarTheme(
+-          backgroundColor: Color(0xFF0D1B2A),
+-          foregroundColor: Color(0xFFE0E1DD),
+-          elevation: 0,
+-        ),
+-        textTheme: const TextTheme(
+-          bodyLarge: TextStyle(color: Color(0xFFE0E1DD)),
+-          bodyMedium: TextStyle(color: Color(0xFFE0E1DD)),
+-        ),
+       ),
++      // نقطة البداية هي شاشة تسجيل الدخول
+       home: const LoginScreen(),
+     );
+   }
+Index: smart_school/README.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/README.md b/smart_school/README.md
+--- a/smart_school/README.md
++++ b/smart_school/README.md	(date 1768073071309)
+@@ -1,186 +1,16 @@
+-# Smart School
+-
+-Smart School is a Flutter application for school management with role-based access (e.g., Admin, Parent, Driver). It integrates with Firebase for authentication and data storage, Geolocator for location services, and Flutter Map for mapping.
+-
+-> Note: This README was updated on 2026-01-04. Where project details are unknown, TODOs are included for the repository maintainer to complete.
+-
+-## Table of Contents
+-- [Overview](#overview)
+-- [Tech Stack](#tech-stack)
+-- [Requirements](#requirements)
+-- [Project Structure](#project-structure)
+-- [Setup](#setup)
+-- [Running the App](#running-the-app)
+-- [Build & Release](#build--release)
+-- [Environment Variables & Configuration](#environment-variables--configuration)
+-- [Scripts](#scripts)
+-- [Testing](#testing)
+-- [Troubleshooting](#troubleshooting)
+-- [License](#license)
+-
+-## Overview
+-This app initializes Firebase on startup and routes users to a login screen. It includes controllers and screens for admins, parents, and drivers, as well as Firebase-backed services.
+-
+-- Entry point: `lib/main.dart`
+-- Initial route/home: `LoginScreen` (`lib/screens/login_screen.dart`)
+-- Firebase initialization: `Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)` using `lib/services/firebase_options.dart` (generated by FlutterFire).
+-
+-## Tech Stack
+-- Language: Dart (Flutter)
+-- Framework: Flutter (Material 3)
+-- Package manager: `flutter pub`
+-- Core dependencies (from `pubspec.yaml`):
+-  - `firebase_core`, `firebase_auth`, `cloud_firestore`
+-  - `geolocator`
+-  - `flutter_map`, `latlong2`
+-  - `http`, `intl`, `url_launcher`, `image_picker`
+-- Platforms: Android, iOS, Web, Windows, macOS, Linux (Flutter multi-platform folders present)
+-
+-## Requirements
+-- Flutter SDK (compatible with Dart SDK `^3.9.2` per `pubspec.yaml`)
+-- A configured Firebase project (Web/Android/iOS and optionally desktop/web as needed)
+-- Platform SDKs as required by Flutter for your target platforms
+-  - Android: Android Studio + SDK, Java 17 per current Flutter toolchain
+-  - iOS: Xcode (on macOS)
+-  - Web: A modern browser
+-  - Desktop: Platform toolchain per Flutter docs
+-
+-Optional/Tooling:
+-- FlutterFire CLI for (re)generating Firebase options: `dart pub global activate flutterfire_cli`
+-
+-## Project Structure
+-```
+-smart_school/
+-├─ lib/
+-│  ├─ main.dart
+-│  ├─ controllers/
+-│  │  ├─ admin_controller.dart
+-│  │  ├─ driver_controller.dart
+-│  │  └─ parent_controller.dart
+-│  ├─ screens/
+-│  │  ├─ admin_dashboard_screen.dart
+-│  │  ├─ assignments_screen.dart
+-│  │  ├─ driver_screen.dart
+-│  │  ├─ exam_results_screen.dart
+-│  │  └─ login_screen.dart
+-│  ├─ services/
+-│  │  ├─ auth_service.dart
+-│  │  └─ firebase_options.dart  (generated by FlutterFire)
+-│  ├─ widgets/                  (reusable UI widgets)
+-│  └─ models/                   (data models)
+-├─ test/
+-│  └─ widget_test.dart
+-├─ android/, ios/, web/, windows/, macos/, linux/
+-├─ pubspec.yaml
+-└─ analysis_options.yaml
+-```
+-
+-## Setup
+-1) Install Flutter
+-- Follow the official guide: https://docs.flutter.dev/get-started/install
+-- Ensure `flutter --version` works and you have required platform toolchains.
+-
+-2) Fetch dependencies
+-```
+-flutter pub get
+-```
+-
+-3) Configure Firebase
+-- This project expects `lib/services/firebase_options.dart` to exist (it already does in this repo). If you need to reconfigure or set up a new Firebase project:
+-  - Install FlutterFire CLI: `dart pub global activate flutterfire_cli`
+-  - Run: `flutterfire configure` and select your Firebase project and platforms
+-  - This generates/updates `lib/services/firebase_options.dart`
+-
+-4) Platform permissions (Location, Internet, etc.)
+-- Android: Ensure `ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` permissions are in `AndroidManifest.xml` for `geolocator`. Internet permission is usually included by default.
+-- iOS: Add `NSLocationWhenInUseUsageDescription` (and/or `NSLocationAlwaysAndWhenInUseUsageDescription` if needed) in `ios/Runner/Info.plist`.
+-- Web: Geolocation prompts are handled by the browser.
+-
+-TODOs for Maintainers:
+-- TODO: Verify and document all Android `AndroidManifest.xml` permissions currently declared.
+-- TODO: Verify and document all iOS `Info.plist` keys currently declared.
+-
+-## Running the App
+-List devices and select a target:
+-```
+-flutter devices
+-```
+-Run in debug mode on the selected device:
+-```
+-flutter run
+-```
+-Run for a specific platform/device (examples):
+-```
+-flutter run -d chrome       # Web
+-flutter run -d windows      # Windows desktop
+-flutter run -d macos        # macOS desktop
+-flutter run -d linux        # Linux desktop
+-flutter run -d emulator-5554  # Android emulator
+-```
+-
+-Hot reload is supported in debug mode.
++# smart_school
+ 
+-## Build & Release
+-- Android APK (debug):
+-```
+-flutter build apk
+-```
+-- Android AppBundle (release):
+-```
+-flutter build appbundle
+-```
+-- iOS (release; requires macOS/Xcode):
+-```
+-flutter build ios
+-```
+-- Web (release):
+-```
+-flutter build web
+-```
+-- Desktop (release):
+-```
+-flutter build windows | macos | linux
+-```
++A new Flutter project.
+ 
+-Refer to Flutter docs for signing and store deployment steps.
++## Getting Started
+ 
+-## Environment Variables & Configuration
+-- Firebase configuration is embedded via `firebase_options.dart` generated by FlutterFire. No `.env` file is used by default.
+-- If you need environment-specific settings beyond Firebase (e.g., API URLs), consider using Dart `const`/`--dart-define` flags, e.g.:
+-```
+-flutter run --dart-define=API_BASE_URL=https://example.com
+-```
+-- The app uses `flutter_map` (OpenStreetMap by default) and does not require a Google Maps API key. If you switch to a tiles provider that requires keys, document it here.
++This project is a starting point for a Flutter application.
+ 
+-TODOs for Maintainers:
+-- TODO: List any additional environment keys if introduced (e.g., `--dart-define` values).
++A few resources to get you started if this is your first Flutter project:
+ 
+-## Scripts
+-This project does not define custom CLI scripts. Common commands:
+-- Format: `flutter format .`
+-- Analyze: `flutter analyze`
+-- Test: `flutter test`
+-- Outdated deps: `flutter pub outdated`
+-- Upgrade deps: `flutter pub upgrade --major-versions`
++- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
++- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+ 
+-## Testing
+-A starter widget test exists at `test/widget_test.dart`.
+-
+-Run all tests:
+-```
+-flutter test
+-```
+-
+-TODOs for Maintainers:
+-- TODO: Add unit tests for controllers in `lib/controllers`.
+-- TODO: Add integration/widget tests for major screens and Firebase flows.
+-
+-## Troubleshooting
+-- If Firebase fails to initialize, re-run `flutterfire configure` to regenerate `firebase_options.dart` and ensure each platform has the required config files (e.g., `google-services.json` for Android, `GoogleService-Info.plist` for iOS, and web config in `web/index.html` if applicable).
+-- If Geolocator features fail:
+-  - Ensure runtime location permission is requested and granted.
+-  - Confirm platform permission declarations (Android/iOS) exist.
+-- For Windows builds, ensure Visual Studio with Desktop development with C++ workload is installed.
+-
+-## License
+-TODO: Add a license (e.g., MIT, Apache-2.0). If unspecified, the project is proprietary by default.
++For help getting started with Flutter development, view the
++[online documentation](https://docs.flutter.dev/), which offers tutorials,
++samples, guidance on mobile development, and a full API reference.
+Index: smart_school/pubspec.lock
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/smart_school/pubspec.lock b/smart_school/pubspec.lock
+--- a/smart_school/pubspec.lock
++++ b/smart_school/pubspec.lock	(date 1768072957608)
+@@ -141,10 +141,10 @@
+     dependency: transitive
+     description:
+       name: ffi
+-      sha256: d07d37192dbf97461359c1518788f203b0c9102cfd2c35a716b823741219542c
++      sha256: "289279317b4b16eb2bb7e271abccd4bf84ec9bdcbe999e278a94b804f5630418"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "2.1.5"
++    version: "2.1.4"
+   file_selector_linux:
+     dependency: transitive
+     description:
+@@ -308,10 +308,10 @@
+     dependency: transitive
+     description:
+       name: geolocator_linux
+-      sha256: d64112a205931926f4363bb6bd48f14cb38e7326833041d170615586cd143797
++      sha256: c4e966f0a7a87e70049eac7a2617f9e16fd4c585a26e4330bdfc3a71e6a721f3
+       url: "https://pub.dev"
+     source: hosted
+-    version: "0.2.4"
++    version: "0.2.3"
+   geolocator_platform_interface:
+     dependency: transitive
+     description:
+@@ -532,10 +532,10 @@
+     dependency: transitive
+     description:
+       name: package_info_plus
+-      sha256: f69da0d3189a4b4ceaeb1a3defb0f329b3b352517f52bed4290f83d4f06bc08d
++      sha256: "16eee997588c60225bda0488b6dcfac69280a6b7a3cf02c741895dd370a02968"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "9.0.0"
++    version: "8.3.1"
+   package_info_plus_platform_interface:
+     dependency: transitive
+     description:
