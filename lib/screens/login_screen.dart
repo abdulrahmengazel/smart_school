@@ -42,11 +42,19 @@ class _LoginScreenState extends State<LoginScreen> {
           context,
           MaterialPageRoute(builder: (context) => const DriverScreen()),
         );
-      } else {
+      }
+      if(role == 'parent'){
         // توجيه لولي الأمر
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const ParentScreen()),
+        );
+      }
+      if(role == 'admin'){
+        // توجيه للمشرف
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
         );
       }
     } else {
@@ -120,26 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? const CircularProgressIndicator()
                       : const Text("LOGIN", style: TextStyle(fontSize: 18)),
                 ),
-              ),
-              const SizedBox(height: 50),
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AdminDashboardScreen(),
-                    ),
-                  );
-                },
-                icon: Icon(
-                  Icons.admin_panel_settings,
-                  color: colorScheme.secondary,
-                ),
-                label: Text(
-                  "Admin Dashboard (Dev Only)",
-                  style: TextStyle(color: colorScheme.secondary),
-                ),
-              ),
+              )
             ],
           ),
         ),

@@ -9,6 +9,8 @@ import 'package:smart_school/screens/assignments_screen.dart';
 import 'package:smart_school/screens/exam_results_screen.dart';
 import 'package:smart_school/screens/map_screen.dart';
 import 'package:smart_school/screens/notifications_screen.dart';
+import 'package:smart_school/services/auth_service.dart';
+import 'package:smart_school/screens/login_screen.dart';
 
 class ParentScreen extends StatefulWidget {
   const ParentScreen({super.key});
@@ -247,6 +249,15 @@ class _ParentScreenState extends State<ParentScreen> {
             },
           ),
           IconButton(icon: const Icon(Icons.calendar_month), onPressed: _pickDate),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthService().signOut();
+              if (context.mounted) {
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+              }
+            },
+          )
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(

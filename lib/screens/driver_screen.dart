@@ -294,7 +294,7 @@ class _DriverScreenState extends State<DriverScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Driver Dashboard 🚌", style: TextStyle(fontSize: 16)),
+            Text("$driverName", style: const TextStyle(fontSize: 16)),
             Text(currentRouteName ?? 'No Route', style: const TextStyle(fontSize: 12)),
           ],
         ),
@@ -306,6 +306,9 @@ class _DriverScreenState extends State<DriverScreen> {
               onPressed: _toggleTrip,
               icon: Icon(_isTracking ? Icons.stop_circle : Icons.play_circle_fill),
               label: Text(_isTracking ? "STOP" : "START"),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+              ),
             ),
           IconButton(
             icon: const Icon(Icons.logout),
