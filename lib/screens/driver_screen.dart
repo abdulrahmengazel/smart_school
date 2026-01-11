@@ -117,7 +117,7 @@ class _DriverScreenState extends State<DriverScreen> {
       'trip_start_time': FieldValue.serverTimestamp(),
     });
 
-    _trackingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+    _trackingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       try {
         Position position = await Geolocator.getCurrentPosition();
         if (currentBusId != null) {
@@ -351,25 +351,7 @@ class _DriverScreenState extends State<DriverScreen> {
                 style: TextStyle(color: colorScheme.onError, fontWeight: FontWeight.bold),
               ),
             ),
-          Expanded(
-            flex: 2,
-            child: Container(
-              width: double.infinity,
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceVariant,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: _selectedImage != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(15),
-                      child: kIsWeb
-                          ? Image.network(_selectedImage!.path, fit: BoxFit.cover)
-                          : Image.file(File(_selectedImage!.path), fit: BoxFit.cover),
-                    )
-                  : Center(child: Icon(Icons.camera_enhance, size: 60, color: colorScheme.onSurfaceVariant.withOpacity(0.5))),
-            ),
-          ),
+          const SizedBox(height: 30),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -381,7 +363,7 @@ class _DriverScreenState extends State<DriverScreen> {
                     label: const Text("Scan Face"),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 30),
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: (_isLoading || currentBusId == null) ? null : () => _processImage(ImageSource.gallery),
@@ -392,7 +374,7 @@ class _DriverScreenState extends State<DriverScreen> {
               ],
             ),
           ),
-          const Divider(height: 30),
+          const Divider(height: 40),
           Expanded(
             flex: 3,
             child: _isLoading
