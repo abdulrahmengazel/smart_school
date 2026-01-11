@@ -117,7 +117,7 @@ class _DriverScreenState extends State<DriverScreen> {
       'trip_start_time': FieldValue.serverTimestamp(),
     });
 
-    _trackingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+    _trackingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
       try {
         Position position = await Geolocator.getCurrentPosition();
         if (currentBusId != null) {

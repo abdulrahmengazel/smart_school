@@ -49,6 +49,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         'driver_id': 'driver_02',
         'capacity': 30,
       },
+      {
+        'route_name': 'East Route (Industrial Area)',
+        'plate_number': 'DXB-555',
+        'driver_id': 'driver_03_uid',
+        'capacity': 20,
+      },
     ];
     WriteBatch batch = _firestore.batch();
     for (var route in routes) {
